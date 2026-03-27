@@ -1,0 +1,105 @@
+# =========================
+# Dependencias
+# =========================
+node_modules/
+
+# =========================
+# Variables de entorno
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Builds / compilados
+# =========================
+dist/
+build/
+coverage/
+.next/
+out/
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Archivos del sistema
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Archivos temporales
+# =========================
+tmp/
+temp/
+.tmp/
+.cache/
+
+# =========================
+# Docker
+# =========================
+docker-data/
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# NestJS / TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Vite / React
+# =========================
+vite.config.ts.timestamp-*
+*.local
+
+# =========================
+# Test / reports
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Archivos generados por uploads o exportaciones
+# =========================
+uploads/
+exports/
+reports/
+
+# =========================
+# Base de datos local
+# =========================
+*.sqlite
+*.sqlite3
+
+# =========================
+# Archivos sensibles
+# =========================
+*.pem
+*.key
+*.crt
+
+# =========================
+# Package manager locks
+# Deja solo el que uses
+# =========================
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
