@@ -1,0 +1,65 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  OPERADOR
+}
+
+enum ProductStatus {
+  ACTIVO
+  INACTIVO
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(OPERADOR)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Ingredient {
+  id        Int      @id @default(autoincrement())
+  name      String
+  quantity  Int      @default(0)
+  unit      String   @default("u")
+  minStock  Int      @default(0)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id          Int            @id @default(autoincrement())
+  name        String
+  category    String?
+  description String?
+  price       Decimal?       @db.Decimal(10, 2)
+  stock       Int            @default(0)
+  status      ProductStatus  @default(ACTIVO)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model StockAlert {
+  id           Int      @id @default(autoincrement())
+  entityType   String
+  entityId     Int
+  entityName   String
+  currentStock Int
+  minStock     Int
+  resolved     Boolean @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
