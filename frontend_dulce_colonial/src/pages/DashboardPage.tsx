@@ -1,34 +1,82 @@
-import { useAuth } from '../context/AuthContext';
-import { useStockAlerts } from '../hooks/useStockAlerts';
+import { useQuery } from '@tanstack/react-query';
+import AppLayout from '../components/layout/AppLayout';
+import StatCard from '../components/ui/StatCard';
+import Badge from '../components/ui/Badge';
+import { reportsService } from '../services/reports.service';
+import { movementsService } from '../services/movements.service';
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth();
-  const { alerts } = useStockAlerts();
+  const { data: stock } = useQuery({
+    queryKey: ['report-stock'],
+    queryFn: reportsService.getStock,
+  });
+
+  const { data: lowStock } = useQuery({
+    queryKey: ['report-low-stock'],
+    queryFn: reportsService.getLowStock,
+  });
+
+  const { data: summary } = useQuery({
+    queryKey: ['movements-summary'],
+    queryFn: () => movementsService.getSummary(),
+  });
 
   return (
-    <div style={{ padding: 32, fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>🍰 Dulce Colonial</h1>
-        <div>
-          <span style={{ marginRight: 16 }}>👤 {user?.name} ({user?.role})</span>
-          <button onClick={logout} style={{ padding: '8px 16px', cursor: 'pointer' }}>
-            Cerrar sesión
-          </button>
+    <AppLayout title="Panel de control">
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, marginBottom: 28 }}>
+        <StatCard icon="🍰" label="Productos activos" value={stock?.products?.active ?? '—'} color="#c0392b" />
+        <StatCard icon="📦" label="Tipos de insumos" value={stock?.ingredients?.total ?? '—'} color="#3d1a00" />
+        <StatCard icon="⚠️" label="Bajo stock" value={lowStock ? (lowStock.lowProducts.total + lowStock.lowIngredients.total) : '—'} color="#e67e22" subtitle="productos + insumos" />
+        <StatCard icon="↕️" label="Movimientos totales" value={summary?.total ?? '—'} color="#27ae60" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {/* Bajo stock — productos */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: 15, color: '#1a0a00' }}>⚠️ Productos con bajo stock</h3>
+          {lowStock?.lowProducts?.data?.length === 0
+            ? <p style={{ color: '#aaa', fontSize: 14 }}>Todo en orden ✅</p>
+            : lowStock?.lowProducts?.data?.map((p: any) => (
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f5f0eb', fontSize: 14 }}>
+                <span>{p.name}</span>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ color: '#c0392b', fontWeight: 600 }}>{p.stock}</span>
+                  <Badge label={p.status} />
+                </div>
+              </div>
+            ))}
+        </div>
+
+        {/* Bajo stock — insumos */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: 15, color: '#1a0a00' }}>📦 Insumos bajo mínimo</h3>
+          {lowStock?.lowIngredients?.data?.length === 0
+            ? <p style={{ color: '#aaa', fontSize: 14 }}>Todo en orden ✅</p>
+            : lowStock?.lowIngredients?.data?.map((i: any) => (
+              <div key={i.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f5f0eb', fontSize: 14 }}>
+                <span>{i.name}</span>
+                <span style={{ color: '#c0392b', fontWeight: 600 }}>
+                  {Number(i.quantity).toFixed(2)} {i.unit} / mín {Number(i.min_stock).toFixed(2)}
+                </span>
+              </div>
+            ))}
+        </div>
+
+        {/* Resumen movimientos */}
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.07)', gridColumn: '1 / -1' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: 15, color: '#1a0a00' }}>↕️ Resumen de movimientos</h3>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {summary?.byType?.map((t: any) => (
+              <div key={t.type} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#faf5f0', borderRadius: 8 }}>
+                <Badge label={t.type} />
+                <span style={{ fontWeight: 700 }}>{t._count.id}</span>
+                <span style={{ color: '#888', fontSize: 13 }}>movimientos</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-      <p>Panel principal — Fase 3 completará este módulo.</p>
-
-      {alerts.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <h3>⚠️ Alertas de stock activas ({alerts.length})</h3>
-          {alerts.map((a, i) => (
-            <div key={i} style={{ background: '#fff3cd', padding: 12, borderRadius: 8, marginBottom: 8 }}>
-              <strong>{a.entityName}</strong> ({a.entityType}) —
-              Stock: {a.currentStock} / Mínimo: {a.minStock}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    </AppLayout>
   );
 }
