@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ProductStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { AlertsGateway } from '../alerts/alerts.gateway';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -64,7 +64,7 @@ export class ProductsService {
         price: dto.price,
         stock: dto.stock ?? 0,
         minStock: dto.minStock ?? 0,
-        status: dto.status ?? ProductStatus.ACTIVO,
+        status: dto.status ?? 'ACTIVO',
       },
     });
     this.emitLowStockIfNeeded(product);

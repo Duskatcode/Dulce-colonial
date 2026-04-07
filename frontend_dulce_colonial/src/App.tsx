@@ -8,6 +8,11 @@ import ProductsPage from './pages/ProductsPage';
 import InventoryPage from './pages/InventoryPage';
 import MovementsPage from './pages/MovementsPage';
 import ReportsPage from './pages/ReportsPage';
+import UsersPage from './pages/UsersPage';
+import DrivePage from './pages/DrivePage';
+import CashPage from './pages/CashPage';
+
+
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -32,6 +37,9 @@ export default function App() {
         <BrowserRouter>
           <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
           <Routes>
+            <Route path="/cash" element={<PrivateRoute><CashPage /></PrivateRoute>} />
+            <Route path="/users" element={<PrivateRoute><UsersPage /></PrivateRoute>} />
+            <Route path="/drive" element={<PrivateRoute><DrivePage /></PrivateRoute>} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/dashboard"  element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
             <Route path="/products"   element={<PrivateRoute><ProductsPage /></PrivateRoute>} />

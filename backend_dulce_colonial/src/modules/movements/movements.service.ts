@@ -1,9 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { MovementEntity, MovementType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { AlertsGateway } from '../alerts/alerts.gateway';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { FilterMovementsDto } from './dto/filter-movements.dto';
+import { MovementEntityValue, MovementTypeValue } from './movements.constants';
 
 @Injectable()
 export class MovementsService {
@@ -13,13 +13,13 @@ export class MovementsService {
   ) {}
 
   async findAll(filters: FilterMovementsDto) {
-    const where: Prisma.MovementWhereInput = {};
+    const where: any = {};
     if (filters.type) where.type = filters.type;
     if (filters.entityType) where.entityType = filters.entityType;
     if (filters.entityId) {
-      if (filters.entityType === MovementEntity.INGREDIENTE) {
+      if (filters.entityType === 'INGREDIENTE') {
         where.ingredientId = filters.entityId;
-      } else if (filters.entityType === MovementEntity.PRODUCTO) {
+      } else if (filters.entityType === 'PRODUCTO') {
         where.productId = filters.entityId;
       } else {
         where.OR = [{ productId: filters.entityId }, { ingredientId: filters.entityId }];
@@ -44,7 +44,7 @@ export class MovementsService {
   }
 
   async getSummary(filters: FilterMovementsDto) {
-    const where: Prisma.MovementWhereInput = {};
+    const where: any = {};
     if (filters.startDate || filters.endDate) {
       where.createdAt = {};
       if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
@@ -67,7 +67,7 @@ export class MovementsService {
       let currentStock = 0;
       let minStock = 0;
 
-      if (dto.entityType === MovementEntity.PRODUCTO) {
+      if (dto.entityType === 'PRODUCTO') {
         const product = await tx.product.findUnique({ where: { id: dto.entityId } });
         if (!product) throw new NotFoundException('Producto no encontrado para el movimiento');
         const newStock = product.stock + delta;
@@ -100,8 +100,8 @@ export class MovementsService {
           quantity: dto.quantity,
           delta,
           notes: dto.notes,
-          productId: dto.entityType === MovementEntity.PRODUCTO ? dto.entityId : null,
-          ingredientId: dto.entityType === MovementEntity.INGREDIENTE ? dto.entityId : null,
+          productId: dto.entityType === 'PRODUCTO' ? dto.entityId : null,
+          ingredientId: dto.entityType === 'INGREDIENTE' ? dto.entityId : null,
           userId,
         },
         include: {
@@ -115,24 +115,24 @@ export class MovementsService {
     });
   }
 
-  calculateDelta(type: MovementType, quantity: number) {
+  calculateDelta(type: MovementTypeValue, quantity: number) {
     switch (type) {
-      case MovementType.ENTRADA:
+      case 'ENTRADA':
         return quantity;
-      case MovementType.SALIDA:
-      case MovementType.MERMA:
+      case 'SALIDA':
+      case 'MERMA':
         return -quantity;
-      case MovementType.AJUSTE:
+      case 'AJUSTE':
       default:
         return quantity;
     }
   }
 
-  private emitAlertIfNeeded(entityType: MovementEntity, name: string, current: number, minStock: number) {
+  private emitAlertIfNeeded(entityType: MovementEntityValue, name: string, current: number, minStock: number) {
     const threshold = minStock > 0 ? minStock : 2;
     if (current <= threshold) {
       this.alertsGateway.emitStockAlert({
-        entityType: entityType === MovementEntity.PRODUCTO ? 'producto' : 'ingrediente',
+        entityType: entityType === 'PRODUCTO' ? 'producto' : 'ingrediente',
         entityName: name,
         currentStock: current,
         minStock: threshold,

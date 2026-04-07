@@ -25,4 +25,8 @@ export class UpdateIngredientDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  observations?: string;
 }

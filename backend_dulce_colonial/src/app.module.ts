@@ -10,11 +10,15 @@ import { MovementsModule } from './modules/movements/movements.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { DriveModule } from './modules/drive/drive.module';
+import { ActivityModule } from './modules/activity/activity.module';
+import { CashModule } from './modules/cash/cash.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     ScheduleModule.forRoot(),
+    CashModule,
+    ActivityModule,
     PrismaModule,
     DriveModule,
     AuthModule,

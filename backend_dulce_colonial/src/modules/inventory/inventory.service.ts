@@ -38,12 +38,14 @@ export class InventoryService {
   }
 
   create(dto: CreateIngredientDto) {
-    return this.prisma.ingredient.create({ data: dto });
+    const data = this.mapObservations(dto);
+    return this.prisma.ingredient.create({ data });
   }
 
   async update(id: number, dto: UpdateIngredientDto) {
     await this.findOne(id);
-    const ingredient = await this.prisma.ingredient.update({ where: { id }, data: dto });
+    const data = this.mapObservations(dto);
+    const ingredient = await this.prisma.ingredient.update({ where: { id }, data });
     this.emitLowStockIfNeeded(ingredient);
     return ingredient;
   }
@@ -98,5 +100,15 @@ export class InventoryService {
         minStock: ingredient.minStock,
       });
     }
+  }
+
+  private mapObservations<
+    T extends { notes?: string; observations?: string }
+  >(dto: T) {
+    const { observations, ...rest } = dto;
+    if (observations !== undefined && rest.notes === undefined) {
+      return { ...rest, notes: observations };
+    }
+    return rest;
   }
 }

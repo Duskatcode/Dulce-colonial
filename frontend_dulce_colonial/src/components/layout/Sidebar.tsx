@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import AlertsPanel from '../ui/AlertsPanel';
 
 const navItems = [
   { to: '/dashboard',  icon: '🏠', label: 'Inicio'       },
@@ -7,10 +8,12 @@ const navItems = [
   { to: '/inventory',  icon: '📦', label: 'Inventario'    },
   { to: '/movements',  icon: '↕️',  label: 'Movimientos'   },
   { to: '/reports',    icon: '📊', label: 'Reportes'      },
+  { to: '/cash', icon: '🏧', label: 'Caja' },
 ];
 
 const adminItems = [
-  { to: '/users',      icon: '👥', label: 'Usuarios'      },
+  { to: '/users', icon: '👥', label: 'Usuarios' },
+  { to: '/drive', icon: '☁️', label: 'Drive'    },
 ];
 
 export default function Sidebar() {
@@ -64,7 +67,9 @@ export default function Sidebar() {
           </>
         )}
       </nav>
-
+      <div style={{ padding: '0 0 8px' }}>
+        <AlertsPanel />
+      </div>
       {/* Usuario */}
       <div style={{ padding: '16px 8px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
         <div style={{ fontSize: 13, color: '#fff', fontWeight: 600 }}>{user?.name}</div>

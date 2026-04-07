@@ -1,65 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-enum Role {
-  ADMIN
-  OPERADOR
-}
-
-enum ProductStatus {
-  ACTIVO
-  INACTIVO
-}
-
 model User {
-  id           Int      @id @default(autoincrement())
+  id           Int           @id @default(autoincrement())
   name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(OPERADOR)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  role         String        @default("OPERADOR")
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  openedRegisters  CashRegister[]    @relation("OpenedBy")
+  closedRegisters  CashRegister[]    @relation("ClosedBy")
+  cashTransactions CashTransaction[]
 
-model Ingredient {
-  id        Int      @id @default(autoincrement())
-  name      String
-  quantity  Int      @default(0)
-  unit      String   @default("u")
-  minStock  Int      @default(0)
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  movements    Movement[]
+  activityLogs ActivityLog[]
+
+  @@map("users")
 }
 
 model Product {
-  id          Int            @id @default(autoincrement())
+  id          Int        @id @default(autoincrement())
   name        String
   category    String?
   description String?
-  price       Decimal?       @db.Decimal(10, 2)
-  stock       Int            @default(0)
-  status      ProductStatus  @default(ACTIVO)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  price       Decimal?   @db.Decimal(10, 2)
+  stock       Int        @default(0)
+  minStock    Int        @default(2) @map("min_stock")
+  status      String     @default("ACTIVO")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  cashTransactions CashTransaction[]
+
+  movements   Movement[]
+
+  @@map("products")
+}
+
+model Ingredient {
+  id         Int        @id @default(autoincrement())
+  name       String
+  unit       String
+  quantity   Float      @default(0)
+  minStock   Float      @default(0) @map("min_stock")
+  notes      String?
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  movements  Movement[]
+
+  @@map("ingredients")
+}
+
+model Movement {
+  id            Int         @id @default(autoincrement())
+  type          String
+  entityType    String      @map("entity_type")
+  referenceType String?     @map("reference_type")
+  referenceId   Int?        @map("reference_id")
+  quantity      Float
+  delta         Float
+  notes         String?
+  productId     Int?        @map("product_id")
+  ingredientId  Int?        @map("ingredient_id")
+  userId        Int?        @map("user_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  product       Product?    @relation(fields: [productId], references: [id])
+  ingredient    Ingredient? @relation(fields: [ingredientId], references: [id])
+  user          User?       @relation(fields: [userId], references: [id])
+
+  @@map("movements")
+}
+
+model Report {
+  id         Int        @id @default(autoincrement())
+  type       String
+  fileName   String     @map("file_name")
+  localPath  String     @map("local_path")
+  status     String
+  driveId    String?    @map("drive_id")
+  driveUrl   String?    @map("drive_url")
+  uploadedAt DateTime?  @map("uploaded_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  driveLogs  DriveLog[]
+
+  @@map("reports")
+}
+
+model DriveLog {
+  id        Int       @id @default(autoincrement())
+  reportId  Int       @map("report_id")
+  success   Boolean
+  error     String?
+  attempt   Int       @default(1)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  report    Report    @relation(fields: [reportId], references: [id])
+
+  @@map("drive_logs")
+}
+
+model ActivityLog {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  action    String
+  entity    String
+  entityId  Int?      @map("entity_id")
+  details   Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@map("activity_logs")
 }
 
 model StockAlert {
-  id           Int      @id @default(autoincrement())
-  entityType   String
-  entityId     Int
-  entityName   String
-  currentStock Int
-  minStock     Int
-  resolved     Boolean @default(false)
-  resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id           Int       @id @default(autoincrement())
+  entityType   String    @map("entity_type")
+  entityId     Int       @map("entity_id")
+  entityName   String    @map("entity_name")
+  currentStock Int       @map("current_stock")
+  minStock     Int       @map("min_stock")
+  resolved     Boolean   @default(false)
+  resolvedAt   DateTime? @map("resolved_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("stock_alerts")
+}
+
+// ─── CAJA ──────────────────────────────────────────────────────────────────
+
+model CashRegister {
+  id             Int           @id @default(autoincrement())
+  status         String        @default("CERRADA") // ABIERTA | CERRADA
+  openedAt       DateTime?     @map("opened_at")
+  closedAt       DateTime?     @map("closed_at")
+  openingBalance Decimal       @default(0) @db.Decimal(12, 2) @map("opening_balance")
+  closingBalance Decimal?      @db.Decimal(12, 2) @map("closing_balance")
+  expectedBalance Decimal?     @db.Decimal(12, 2) @map("expected_balance")
+  notes          String?
+  openedById     Int?          @map("opened_by_id")
+  openedBy       User?         @relation("OpenedBy", fields: [openedById], references: [id])
+  closedById     Int?          @map("closed_by_id")
+  closedBy       User?         @relation("ClosedBy", fields: [closedById], references: [id])
+
+  transactions   CashTransaction[]
+
+  @@map("cash_registers")
+}
+
+model CashTransaction {
+  id             Int           @id @default(autoincrement())
+  cashRegisterId Int           @map("cash_register_id")
+  cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
+  type           String
+  // VENTA | GASTO | INGRESO | DEVOLUCION | COTIZACION
+  amount         Decimal       @db.Decimal(12, 2)
+  description    String
+  reference      String?       // número de factura, concepto libre
+  userId         Int           @map("user_id")
+  user           User          @relation(fields: [userId], references: [id])
+
+  // Relación opcional con producto (para ventas)
+  productId      Int?          @map("product_id")
+  product        Product?      @relation(fields: [productId], references: [id])
+  productQty     Int?          @map("product_qty")
+  productPrice   Decimal?      @db.Decimal(12, 2) @map("product_price")
+
+  balanceAfter   Decimal       @db.Decimal(12, 2) @map("balance_after")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@map("cash_transactions")
 }

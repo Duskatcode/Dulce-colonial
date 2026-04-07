@@ -138,10 +138,22 @@ export default function ProductsPage() {
   );
 }
 
-const Field = ({ label, value, onChange, type = 'text' }: any) => (
+interface FieldProps {
+  label: string;
+  value: string | number;
+  onChange: (value: string) => void;
+  type?: string;
+}
+
+const Field = ({ label, value, onChange, type = 'text' }: FieldProps) => (
   <div>
     <label style={labelStyle}>{label}</label>
-    <input type={type} value={value} onChange={e => onChange(e.target.value)} style={inputStyle} />
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={inputStyle}
+    />
   </div>
 );
 

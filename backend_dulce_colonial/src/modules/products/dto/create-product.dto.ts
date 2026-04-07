@@ -1,6 +1,7 @@
-import { IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ProductStatus } from '@prisma/client';
+import { PRODUCT_STATUS_VALUES } from '../constants/product-status.constants';
+import type { ProductStatusValue } from '../constants/product-status.constants';
 
 export class CreateProductDto {
   @IsString()
@@ -34,6 +35,6 @@ export class CreateProductDto {
   minStock?: number;
 
   @IsOptional()
-  @IsEnum(ProductStatus)
-  status?: ProductStatus;
+  @IsIn(PRODUCT_STATUS_VALUES)
+  status?: ProductStatusValue;
 }

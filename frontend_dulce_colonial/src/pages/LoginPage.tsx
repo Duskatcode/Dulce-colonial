@@ -15,7 +15,13 @@ export default function LoginPage() {
       await login(email, password);
       toast.success('Bienvenido a Dulce Colonial');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Credenciales inválidas');
+      const raw =
+        err?.response?.data?.message ??
+        err?.response?.data?.error ??
+        err?.message ??
+        'Credenciales inválidas';
+      const message = Array.isArray(raw) ? raw.join(', ') : String(raw);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
