@@ -11,6 +11,8 @@ import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
 import DrivePage from './pages/DrivePage';
 import CashPage from './pages/CashPage';
+import DriveCallbackPage from './pages/DriveCallbackPage';
+import DriveSettingsPage from './pages/DriveSettingsPage';
 
 
 
@@ -37,9 +39,11 @@ export default function App() {
         <BrowserRouter>
           <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
           <Routes>
+            <Route path="/drive/callback" element={<DriveCallbackPage />} />
             <Route path="/cash" element={<PrivateRoute><CashPage /></PrivateRoute>} />
             <Route path="/users" element={<PrivateRoute><UsersPage /></PrivateRoute>} />
             <Route path="/drive" element={<PrivateRoute><DrivePage /></PrivateRoute>} />
+            <Route path="/drive/settings" element={<PrivateRoute><DriveSettingsPage /></PrivateRoute>} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/dashboard"  element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
             <Route path="/products"   element={<PrivateRoute><ProductsPage /></PrivateRoute>} />

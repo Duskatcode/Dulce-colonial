@@ -16,7 +16,9 @@ export class AuthController {
   }
 
   @Post('refresh')
-  @ApiOperation({ summary: 'Obtener un nuevo access token usando refresh token' })
+  @ApiOperation({
+    summary: 'Obtener un nuevo access token usando refresh token',
+  })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refresh(dto);
   }

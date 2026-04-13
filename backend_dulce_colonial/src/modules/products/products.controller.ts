@@ -60,9 +60,18 @@ export class ProductsController {
     return this.productsService.update(id, dto);
   }
 
+  @Patch(':id/deactivate')
+  @Roles(Role.ADMIN)
+  deactivate(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.deactivate(id);
+  }
+
   @Patch(':id/adjust-stock')
   @Roles(Role.ADMIN, Role.OPERADOR)
-  adjustStock(@Param('id', ParseIntPipe) id: number, @Body() dto: AdjustStockDto) {
+  adjustStock(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdjustStockDto,
+  ) {
     return this.productsService.adjustStock(id, dto);
   }
 

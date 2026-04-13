@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -9,7 +10,7 @@ import { ActivityService } from './modules/activity/activity.service';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api/v1', {
-    exclude: ['api/docs', 'api/docs-json'],
+    exclude: ['api/docs', 'api/docs-json', 'google/callback'],
   });
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -17,6 +18,12 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+    }),
+  );
   app.useGlobalFilters(new GlobalExceptionFilter());
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Dulce Colonial API')
@@ -32,15 +39,19 @@ async function bootstrap() {
   // Reporte automático al apagar el servidor
   app.enableShutdownHooks();
   const reportsService = app.get(ReportsService);
-  process.on('SIGTERM', async () => {
-    await reportsService.runShutdownReport();
-    await app.close();
+  process.on('SIGTERM', () => {
+    void (async () => {
+      await reportsService.runShutdownReport();
+      await app.close();
+    })();
   });
-  process.on('SIGINT', async () => {
-    await reportsService.runShutdownReport();
-    await app.close();
+  process.on('SIGINT', () => {
+    void (async () => {
+      await reportsService.runShutdownReport();
+      await app.close();
+    })();
   });
   const activityService = app.get(ActivityService);
   app.useGlobalInterceptors(new ActivityInterceptor(activityService));
 }
-bootstrap();
+void bootstrap();

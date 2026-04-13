@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn, IsNumber, Min } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsInt, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PRODUCT_STATUS_VALUES } from '../constants/product-status.constants';
 import type { ProductStatusValue } from '../constants/product-status.constants';
@@ -18,13 +18,13 @@ export class FilterProductDto {
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
   page?: number = 1;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
   limit?: number = 20;
 }

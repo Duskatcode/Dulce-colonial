@@ -7,6 +7,7 @@ import Modal from '../components/ui/Modal';
 import { inventoryService } from '../services/inventory.service';
 import { Ingredient } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
 const emptyForm = { name: '', unit: 'kg', quantity: 0, minStock: 0, observations: '' };
 
@@ -35,7 +36,7 @@ export default function InventoryPage() {
       setEditing(null);
       setForm(emptyForm);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al guardar'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al guardar')),
   });
 
   const deleteMutation = useMutation({

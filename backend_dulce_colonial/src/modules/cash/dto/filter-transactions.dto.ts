@@ -1,4 +1,11 @@
-import { IsOptional, IsString, IsDateString, IsNumber, Min } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsNumber,
+  IsInt,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class FilterTransactionsDto {
@@ -26,13 +33,13 @@ export class FilterTransactionsDto {
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
   page?: number = 1;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
-  limit?: number = 30;
+  limit?: number = 20;
 }

@@ -8,6 +8,7 @@ import Modal from '../components/ui/Modal';
 import { usersService } from '../services/users.service';
 import { activityService } from '../services/activity.service';
 import { User } from '../types';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
 const emptyForm = { name: '', email: '', password: '', role: 'OPERADOR' };
 
@@ -37,7 +38,7 @@ export default function UsersPage() {
       setModalOpen(false);
       setForm(emptyForm);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al crear'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al crear')),
   });
 
   const deactivateMutation = useMutation({

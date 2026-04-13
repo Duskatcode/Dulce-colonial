@@ -1,7 +1,13 @@
-import { IsDateString, IsIn, IsInt, IsOptional } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { MOVEMENT_ENTITY_VALUES, MOVEMENT_TYPE_VALUES } from '../movements.constants';
-import type { MovementEntityValue, MovementTypeValue } from '../movements.constants';
+import {
+  MOVEMENT_ENTITY_VALUES,
+  MOVEMENT_TYPE_VALUES,
+} from '../movements.constants';
+import type {
+  MovementEntityValue,
+  MovementTypeValue,
+} from '../movements.constants';
 
 export class FilterMovementsDto {
   @IsOptional()
@@ -29,4 +35,16 @@ export class FilterMovementsDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number = 20;
 }

@@ -18,6 +18,7 @@ build/
 coverage/
 .next/
 out/
+**/dist/
 
 # =========================
 # Logs
@@ -82,12 +83,20 @@ coverage/
 uploads/
 exports/
 reports/
+release/
+*.zip
 
 # =========================
 # Base de datos local
 # =========================
 *.sqlite
 *.sqlite3
+
+# =========================
+# Credenciales externas
+# =========================
+backend_dulce_colonial/config/google-credentials.json
+backend_dulce_colonial/config/google-token.json
 
 # =========================
 # Archivos sensibles

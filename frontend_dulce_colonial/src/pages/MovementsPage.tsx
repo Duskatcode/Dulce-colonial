@@ -10,13 +10,14 @@ import { productsService } from '../services/products.service';
 import { inventoryService } from '../services/inventory.service';
 import { Movement, MovementType, ReferenceType } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
-const emptyForm = { type: 'ENTRADA', referenceType: 'PRODUCTO', referenceId: 0, quantity: 1, reason: '', notes: '' };
+const emptyForm = { type: 'ENTRADA', entityType: 'PRODUCTO', entityId: 0, quantity: 1, notes: '' };
 
 export default function MovementsPage() {
   const { isOperador } = useAuth();
   const qc = useQueryClient();
-  const [filters, setFilters] = useState({ type: '', referenceType: '', page: 1 });
+  const [filters, setFilters] = useState({ type: '', entityType: '', page: 1 });
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<any>(emptyForm);
 
@@ -24,7 +25,7 @@ export default function MovementsPage() {
     queryKey: ['movements', filters],
     queryFn: () => movementsService.getAll({
       type: filters.type as MovementType || undefined,
-      referenceType: filters.referenceType as ReferenceType || undefined,
+      entityType: filters.entityType as ReferenceType || undefined,
       page: filters.page,
       limit: 20,
     }),
@@ -50,7 +51,7 @@ export default function MovementsPage() {
       setModalOpen(false);
       setForm(emptyForm);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al registrar'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al registrar')),
   });
 
   const columns = [
@@ -68,11 +69,11 @@ export default function MovementsPage() {
         {r.type === 'ENTRADA' ? '+' : '-'}{r.quantity}
       </span>
     )},
-    { key: 'reason', label: 'Motivo', render: (r: Movement) => r.reason || '—' },
+    { key: 'notes', label: 'Motivo', render: (r: Movement) => r.notes || '—' },
     { key: 'user', label: 'Usuario', render: (r: Movement) => r.user?.name },
   ];
 
-  const refOptions = form.referenceType === 'PRODUCTO'
+  const refOptions = form.entityType === 'PRODUCTO'
     ? products?.data || []
     : ingredients?.data || [];
 
@@ -84,7 +85,7 @@ export default function MovementsPage() {
             <option value="">Todos los tipos</option>
             {['ENTRADA','SALIDA','AJUSTE','MERMA'].map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <select value={filters.referenceType} onChange={e => setFilters({ ...filters, referenceType: e.target.value, page: 1 })} style={{ ...inputStyle, width: 160 }}>
+          <select value={filters.entityType} onChange={e => setFilters({ ...filters, entityType: e.target.value, page: 1 })} style={{ ...inputStyle, width: 160 }}>
             <option value="">Productos e insumos</option>
             <option value="PRODUCTO">Solo productos</option>
             <option value="INGREDIENTE">Solo insumos</option>
@@ -112,31 +113,30 @@ export default function MovementsPage() {
           </div>
           <div>
             <label style={labelStyle}>Aplica a</label>
-            <select value={form.referenceType}
-              onChange={e => setForm({ ...form, referenceType: e.target.value, referenceId: 0 })}
+            <select value={form.entityType}
+              onChange={e => setForm({ ...form, entityType: e.target.value, entityId: 0 })}
               style={inputStyle}>
               <option value="PRODUCTO">Producto</option>
               <option value="INGREDIENTE">Insumo</option>
             </select>
           </div>
           <div>
-            <label style={labelStyle}>{form.referenceType === 'PRODUCTO' ? 'Producto' : 'Insumo'}</label>
-            <select value={form.referenceId}
-              onChange={e => setForm({ ...form, referenceId: +e.target.value })}
+            <label style={labelStyle}>{form.entityType === 'PRODUCTO' ? 'Producto' : 'Insumo'}</label>
+            <select value={form.entityId}
+              onChange={e => setForm({ ...form, entityId: +e.target.value })}
               style={inputStyle}>
               <option value={0}>Seleccionar...</option>
               {refOptions.map((item: any) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} (disponible: {form.referenceType === 'PRODUCTO' ? item.stock : Number(item.quantity).toFixed(2)} {item.unit || ''})
+                  {item.name} (disponible: {form.entityType === 'PRODUCTO' ? item.stock : Number(item.quantity).toFixed(2)} {item.unit || ''})
                 </option>
               ))}
             </select>
           </div>
           <Field label="Cantidad" type="number" value={form.quantity} onChange={(v: string) => setForm({ ...form, quantity: +v })} />
-          <Field label="Motivo" value={form.reason} onChange={(v: string) => setForm({ ...form, reason: v })} />
-          <Field label="Notas adicionales" value={form.notes} onChange={(v: string) => setForm({ ...form, notes: v })} />
-          <button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending || !form.referenceId}
-            style={{ padding: '11px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, opacity: !form.referenceId ? 0.5 : 1 }}>
+          <Field label="Motivo" value={form.notes} onChange={(v: string) => setForm({ ...form, notes: v })} />
+          <button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending || !form.entityId}
+            style={{ padding: '11px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, opacity: !form.entityId ? 0.5 : 1 }}>
             {createMutation.isPending ? 'Registrando...' : 'Registrar'}
           </button>
         </div>

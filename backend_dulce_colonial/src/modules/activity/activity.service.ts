@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma/prisma.service';
 
 export interface LogActivityParams {
@@ -6,7 +7,16 @@ export interface LogActivityParams {
   action: string;
   entity: string;
   entityId?: number;
-  details?: Record<string, any>;
+  details?: Prisma.InputJsonValue;
+}
+
+export interface ActivityFilters {
+  userId?: number;
+  entity?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  limit?: number;
 }
 
 @Injectable()
@@ -25,24 +35,18 @@ export class ActivityService {
     });
   }
 
-  async findAll(filters: {
-    userId?:   number;
-    entity?:   string;
-    dateFrom?: string;
-    dateTo?:   string;
-    page?:     number;
-    limit?:    number;
-  }) {
+  async findAll(filters: ActivityFilters) {
     const { userId, entity, dateFrom, dateTo, page = 1, limit = 30 } = filters;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.ActivityLogWhereInput = {};
     if (userId) where.userId = userId;
     if (entity) where.entity = { contains: entity, mode: 'insensitive' };
     if (dateFrom || dateTo) {
-      where.createdAt = {};
-      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo)   where.createdAt.lte = new Date(dateTo);
+      const createdAtFilter: Prisma.DateTimeFilter = {};
+      if (dateFrom) createdAtFilter.gte = new Date(dateFrom);
+      if (dateTo) createdAtFilter.lte = new Date(dateTo);
+      where.createdAt = createdAtFilter;
     }
 
     const [data, total] = await this.prisma.$transaction([

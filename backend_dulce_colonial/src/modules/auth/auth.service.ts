@@ -33,8 +33,12 @@ export class AuthService {
       this.configService.getOrThrow<string>('JWT_REFRESH_SECRET');
     const accessTtl = this.configService.get<string>('JWT_EXPIRES_IN');
     const refreshTtl = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN');
-    this.accessExpiresIn = accessTtl ? (accessTtl as StringValue) : ('8h' as const);
-    this.refreshExpiresIn = refreshTtl ? (refreshTtl as StringValue) : ('7d' as const);
+    this.accessExpiresIn = accessTtl
+      ? (accessTtl as StringValue)
+      : ('8h' as const);
+    this.refreshExpiresIn = refreshTtl
+      ? (refreshTtl as StringValue)
+      : ('7d' as const);
   }
 
   async login(dto: LoginDto) {

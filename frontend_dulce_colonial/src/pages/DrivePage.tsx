@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import AppLayout from '../components/layout/AppLayout';
 import { reportsService } from '../services/reports.service';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
 const FOLDERS = [
   { key: 'daily',  label: '📅 Reportes diarios',   folder: 'reportes-diarios'   },
@@ -33,7 +34,7 @@ export default function DrivePage() {
       toast.success('Reporte generado y subido a Drive');
       qc.invalidateQueries({ queryKey: ['drive-files'] });
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al generar reporte'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al generar reporte')),
   });
 
   return (

@@ -8,6 +8,7 @@ import Modal from '../components/ui/Modal';
 import { productsService } from '../services/products.service';
 import { Product } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
 const emptyForm = { name: '', category: '', description: '', price: 0, stock: 0, status: 'ACTIVO' };
 
@@ -40,7 +41,7 @@ export default function ProductsPage() {
       setEditing(null);
       setForm(emptyForm);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al guardar'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al guardar')),
   });
 
   const deactivateMutation = useMutation({

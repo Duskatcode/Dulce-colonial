@@ -7,6 +7,7 @@ import StatCard from '../components/ui/StatCard';
 import { cashService } from '../services/cash.service';
 import { productsService } from '../services/products.service';
 import { CashTransaction, TransactionType } from '../types';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
 interface CashStatusResponse {
   status: 'ABIERTA' | 'CERRADA';
@@ -115,10 +116,6 @@ const emptyTx: TxFormState = {
   productQty: 1,
 };
 
-function getErrorMessage(error: any, fallback: string): string {
-  return error?.response?.data?.message || fallback;
-}
-
 function getProductTotal(
   products: ProductsCashResponse | undefined,
   productId: number,
@@ -190,7 +187,7 @@ export default function CashPage() {
       setOpenForm({ openingBalance: 0, notes: '' });
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error, 'Error al abrir caja'));
+      toast.error(getApiErrorMessage(error, 'Error al abrir caja'));
     },
   });
 
@@ -204,7 +201,7 @@ export default function CashPage() {
       setCloseForm({ closingBalance: 0, notes: '' });
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error, 'Error al cerrar caja'));
+      toast.error(getApiErrorMessage(error, 'Error al cerrar caja'));
     },
   });
 
@@ -222,7 +219,7 @@ export default function CashPage() {
       setTxForm(emptyTx);
     },
     onError: (error) => {
-      toast.error(getErrorMessage(error, 'Error al registrar'));
+      console.error(error);
     },
   });
 
@@ -231,6 +228,29 @@ export default function CashPage() {
   const isNeg = balance < 0;
 
   const totalPages = transactions?.meta?.totalPages ?? 0;
+
+  const handleSubmitTransaction = () => {
+    const isProductSale = txForm.type === 'VENTA' && txForm.productId > 0;
+    const productTotal = isProductSale
+      ? getProductTotal(products, txForm.productId, txForm.productQty)
+      : null;
+
+    if (isProductSale && (productTotal === null || productTotal <= 0)) {
+      toast.error('No se pudo calcular el total de la venta');
+      return;
+    }
+
+    txMutation.mutate({
+      type: txForm.type,
+      amount: Number(
+        isProductSale ? productTotal : txForm.amount,
+      ),
+      description: txForm.description,
+      reference: txForm.reference || undefined,
+      productId: isProductSale ? Number(txForm.productId) : undefined,
+      productQty: isProductSale ? Number(txForm.productQty) : undefined,
+    });
+  };
 
   return (
     <AppLayout title="Caja">
@@ -844,16 +864,7 @@ export default function CashPage() {
           </div>
 
           <button
-            onClick={() =>
-              txMutation.mutate({
-                type: txForm.type,
-                amount: txForm.productId > 0 ? 0 : txForm.amount,
-                description: txForm.description,
-                reference: txForm.reference || undefined,
-                productId: txForm.productId > 0 ? txForm.productId : undefined,
-                productQty: txForm.productId > 0 ? txForm.productQty : undefined,
-              })
-            }
+            onClick={handleSubmitTransaction}
             disabled={txMutation.isPending || !txForm.description}
             style={{
               ...btnPrimary,

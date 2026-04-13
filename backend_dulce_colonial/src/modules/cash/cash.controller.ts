@@ -1,8 +1,4 @@
-import {
-  Controller, Get, Post, Body,
-  Query, UseGuards, ParseIntPipe,
-  Param,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { CashService } from './cash.service';
 import { OpenRegisterDto } from './dto/open-register.dto';
@@ -37,12 +33,9 @@ export class CashController {
   @Get('registers')
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Historial de cajas (solo ADMIN)' })
-  findRegisters(
-    @Query('page')  page?:  string,
-    @Query('limit') limit?: string,
-  ) {
+  findRegisters(@Query('page') page?: string, @Query('limit') limit?: string) {
     return this.cashService.findRegisters(
-      page  ? +page  : 1,
+      page ? +page : 1,
       limit ? +limit : 10,
     );
   }
@@ -57,20 +50,14 @@ export class CashController {
   @Post('open')
   @Roles('ADMIN', 'OPERADOR')
   @ApiOperation({ summary: 'Abrir caja con saldo inicial' })
-  open(
-    @Body() dto: CreateTransactionDto,
-    @CurrentUser('id') userId: number,
-  ) {
-    return this.cashService.openRegister(dto as any, userId);
+  open(@Body() dto: OpenRegisterDto, @CurrentUser('id') userId: number) {
+    return this.cashService.openRegister(dto, userId);
   }
 
   @Post('close')
   @Roles('ADMIN', 'OPERADOR')
   @ApiOperation({ summary: 'Cerrar caja con conteo físico' })
-  close(
-    @Body() dto: CloseRegisterDto,
-    @CurrentUser('id') userId: number,
-  ) {
+  close(@Body() dto: CloseRegisterDto, @CurrentUser('id') userId: number) {
     return this.cashService.closeRegister(dto, userId);
   }
 

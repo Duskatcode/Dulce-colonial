@@ -1,3 +1,5 @@
+import { AxiosError } from 'axios';
+import toast from 'react-hot-toast';
 import api from './api';
 
 export const cashService = {
@@ -19,12 +21,26 @@ export const cashService = {
   closeRegister: (data: { closingBalance: number; notes?: string }) =>
     api.post('/cash/close', data).then(r => r.data),
 
-  createTransaction: (data: {
+  createTransaction: async (data: {
     type:        string;
     amount:      number;
     description: string;
     reference?:  string;
     productId?:  number;
     productQty?: number;
-  }) => api.post('/cash/transaction', data).then(r => r.data),
+  }) => {
+    try {
+      const response = await api.post('/cash/transaction', data);
+      return response.data;
+    } catch (error) {
+      const message =
+        (error as AxiosError<{ message: string | string[] }>)?.response?.data
+          ?.message;
+      const readable = Array.isArray(message)
+        ? message.join(', ')
+        : message ?? 'Error al registrar transacción';
+      toast.error(readable);
+      throw error;
+    }
+  },
 };

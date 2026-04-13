@@ -1,4 +1,12 @@
-import { IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { PRODUCT_STATUS_VALUES } from '../constants/product-status.constants';
 import type { ProductStatusValue } from '../constants/product-status.constants';

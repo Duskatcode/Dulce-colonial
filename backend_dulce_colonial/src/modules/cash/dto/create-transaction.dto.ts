@@ -1,6 +1,12 @@
+import { Type } from 'class-transformer';
 import {
-  IsString, IsNumber, IsOptional,
-  IsPositive, IsEnum, IsInt, Min,
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsEnum,
+  IsInt,
+  Min,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -13,6 +19,7 @@ export class CreateTransactionDto {
   type: string;
 
   @ApiProperty({ example: 25000, description: 'Monto en COP' })
+  @Type(() => Number)
   @IsNumber()
   @IsPositive()
   amount: number;
@@ -29,11 +36,13 @@ export class CreateTransactionDto {
   // Solo para ventas
   @ApiProperty({ required: false, example: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   productId?: number;
 
   @ApiProperty({ required: false, example: 5 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   productQty?: number;

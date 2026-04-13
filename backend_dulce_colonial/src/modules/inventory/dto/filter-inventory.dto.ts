@@ -1,5 +1,5 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { IsBoolean, IsOptional, IsString, IsInt, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class FilterInventoryDto {
   @IsOptional()
@@ -14,4 +14,16 @@ export class FilterInventoryDto {
   @Transform(({ value }) => value === 'true')
   @IsBoolean()
   belowMinStock?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number = 20;
 }

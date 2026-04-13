@@ -1,7 +1,13 @@
 import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { MOVEMENT_ENTITY_VALUES, MOVEMENT_TYPE_VALUES } from '../movements.constants';
-import type { MovementEntityValue, MovementTypeValue } from '../movements.constants';
+import {
+  MOVEMENT_ENTITY_VALUES,
+  MOVEMENT_TYPE_VALUES,
+} from '../movements.constants';
+import type {
+  MovementEntityValue,
+  MovementTypeValue,
+} from '../movements.constants';
 
 export class CreateMovementDto {
   @IsIn(MOVEMENT_TYPE_VALUES)

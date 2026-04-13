@@ -1,9 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { AlertsGateway } from '../alerts/alerts.gateway';
 import { CreateMovementDto } from './dto/create-movement.dto';
 import { FilterMovementsDto } from './dto/filter-movements.dto';
-import { MovementEntityValue, MovementTypeValue } from './movements.constants';
+import {
+  MovementEntityValue,
+  MovementTypeValue,
+  MOVEMENT_TYPE_VALUES,
+} from './movements.constants';
 
 @Injectable()
 export class MovementsService {
@@ -13,50 +22,56 @@ export class MovementsService {
   ) {}
 
   async findAll(filters: FilterMovementsDto) {
-    const where: any = {};
-    if (filters.type) where.type = filters.type;
-    if (filters.entityType) where.entityType = filters.entityType;
-    if (filters.entityId) {
-      if (filters.entityType === 'INGREDIENTE') {
-        where.ingredientId = filters.entityId;
-      } else if (filters.entityType === 'PRODUCTO') {
-        where.productId = filters.entityId;
-      } else {
-        where.OR = [{ productId: filters.entityId }, { ingredientId: filters.entityId }];
-      }
-    }
-    if (filters.userId) where.userId = filters.userId;
-    if (filters.startDate || filters.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
-      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
-    }
+    const page = Number(filters.page ?? 1);
+    const limit = Number(filters.limit ?? 20);
+    const skip = (page - 1) * limit;
+    const where = this.buildMovementsWhere(filters);
 
-    return this.prisma.movement.findMany({
-      where,
-      include: {
-        product: true,
-        ingredient: true,
-        user: { select: { id: true, name: true, email: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [rows, total] = await Promise.all([
+      this.prisma.movement.findMany({
+        where,
+        include: {
+          product: true,
+          ingredient: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.movement.count({ where }),
+    ]);
+
+    const data = rows.map((movement) => this.formatMovementResponse(movement));
+
+    return this.buildPaginatedResponse(data, total, page, limit);
   }
 
   async getSummary(filters: FilterMovementsDto) {
-    const where: any = {};
-    if (filters.startDate || filters.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
-      if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
-    }
-
-    return this.prisma.movement.groupBy({
+    const where = this.buildMovementsWhere(filters);
+    const rows = await this.prisma.movement.groupBy({
       by: ['type'],
       where,
       _count: { type: true },
-      _sum: { quantity: true, delta: true },
     });
+
+    const byType = MOVEMENT_TYPE_VALUES.reduce<
+      Record<MovementTypeValue, number>
+    >(
+      (acc, type) => {
+        acc[type] = 0;
+        return acc;
+      },
+      {} as Record<MovementTypeValue, number>,
+    );
+
+    const total = rows.reduce((sum, current) => {
+      const count = current._count.type;
+      byType[current.type] = count;
+      return sum + count;
+    }, 0);
+
+    return { total, byType };
   }
 
   async create(dto: CreateMovementDto, userId?: number) {
@@ -68,10 +83,16 @@ export class MovementsService {
       let minStock = 0;
 
       if (dto.entityType === 'PRODUCTO') {
-        const product = await tx.product.findUnique({ where: { id: dto.entityId } });
-        if (!product) throw new NotFoundException('Producto no encontrado para el movimiento');
+        const product = await tx.product.findUnique({
+          where: { id: dto.entityId },
+        });
+        if (!product)
+          throw new NotFoundException(
+            'Producto no encontrado para el movimiento',
+          );
         const newStock = product.stock + delta;
-        if (newStock < 0) throw new BadRequestException('El movimiento dejaría stock negativo');
+        if (newStock < 0)
+          throw new BadRequestException('El movimiento dejaría stock negativo');
         const updated = await tx.product.update({
           where: { id: dto.entityId },
           data: { stock: newStock },
@@ -80,10 +101,16 @@ export class MovementsService {
         currentStock = updated.stock;
         minStock = updated.minStock ?? 0;
       } else {
-        const ingredient = await tx.ingredient.findUnique({ where: { id: dto.entityId } });
-        if (!ingredient) throw new NotFoundException('Ingrediente no encontrado para el movimiento');
+        const ingredient = await tx.ingredient.findUnique({
+          where: { id: dto.entityId },
+        });
+        if (!ingredient)
+          throw new NotFoundException(
+            'Ingrediente no encontrado para el movimiento',
+          );
         const newQuantity = ingredient.quantity + delta;
-        if (newQuantity < 0) throw new BadRequestException('El movimiento dejaría stock negativo');
+        if (newQuantity < 0)
+          throw new BadRequestException('El movimiento dejaría stock negativo');
         const updated = await tx.ingredient.update({
           where: { id: dto.entityId },
           data: { quantity: newQuantity },
@@ -110,7 +137,12 @@ export class MovementsService {
         },
       });
 
-      this.emitAlertIfNeeded(dto.entityType, targetName, currentStock, minStock);
+      this.emitAlertIfNeeded(
+        dto.entityType,
+        targetName,
+        currentStock,
+        minStock,
+      );
       return movement;
     });
   }
@@ -128,7 +160,12 @@ export class MovementsService {
     }
   }
 
-  private emitAlertIfNeeded(entityType: MovementEntityValue, name: string, current: number, minStock: number) {
+  private emitAlertIfNeeded(
+    entityType: MovementEntityValue,
+    name: string,
+    current: number,
+    minStock: number,
+  ) {
     const threshold = minStock > 0 ? minStock : 2;
     if (current <= threshold) {
       this.alertsGateway.emitStockAlert({
@@ -138,5 +175,68 @@ export class MovementsService {
         minStock: threshold,
       });
     }
+  }
+
+  private buildMovementsWhere(
+    filters: FilterMovementsDto,
+  ): Prisma.MovementWhereInput {
+    const where: Prisma.MovementWhereInput = {};
+    if (filters.type) where.type = filters.type;
+    if (filters.entityType) where.entityType = filters.entityType;
+    if (filters.entityId) {
+      if (filters.entityType === 'INGREDIENTE') {
+        where.ingredientId = filters.entityId;
+      } else if (filters.entityType === 'PRODUCTO') {
+        where.productId = filters.entityId;
+      } else {
+        where.OR = [
+          { productId: filters.entityId },
+          { ingredientId: filters.entityId },
+        ];
+      }
+    }
+    if (filters.userId) where.userId = filters.userId;
+    if (filters.startDate || filters.endDate) {
+      const createdAtFilter: Prisma.DateTimeFilter = {};
+      if (filters.startDate) createdAtFilter.gte = new Date(filters.startDate);
+      if (filters.endDate) createdAtFilter.lte = new Date(filters.endDate);
+      where.createdAt = createdAtFilter;
+    }
+
+    return where;
+  }
+
+  private formatMovementResponse(
+    movement: Prisma.MovementGetPayload<{
+      include: {
+        product: true;
+        ingredient: true;
+        user: { select: { id: true; name: true; email: true } };
+      };
+    }>,
+  ) {
+    return {
+      ...movement,
+      referenceType: movement.entityType,
+      reason: movement.notes ?? undefined,
+    };
+  }
+
+  private buildPaginatedResponse<T>(
+    data: T[],
+    total: number,
+    page: number,
+    limit: number,
+  ) {
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
   }
 }
