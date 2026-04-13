@@ -112,3 +112,8 @@ backend_dulce_colonial/config/google-token.json
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+backend_dulce_colonial/config/google-credentials.json
+backend_dulce_colonial/config/google-token.json
+backend_dulce_colonial/.env
+backend_dulce_colonial/.env.*
