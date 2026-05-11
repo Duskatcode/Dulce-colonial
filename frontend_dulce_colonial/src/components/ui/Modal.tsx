@@ -1,4 +1,5 @@
-import { ReactNode, useEffect } from 'react';
+import type { ReactNode } from 'react';
+import { useEffect } from 'react';
 
 interface ModalProps {
   open: boolean;
@@ -8,9 +9,12 @@ interface ModalProps {
   width?: number;
 }
 
-export default function Modal({ open, onClose, title, children, width = 480 }: ModalProps) {
+export default function Modal({ open, onClose, title, children, width = 520 }: ModalProps) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
@@ -18,29 +22,25 @@ export default function Modal({ open, onClose, title, children, width = 480 }: M
   if (!open) return null;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      background: 'rgba(0,0,0,0.45)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000, padding: 16,
-    }} onClick={onClose}>
-      <div style={{
-        background: '#fff', borderRadius: 14, width: '100%',
-        maxWidth: width, boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-        maxHeight: '90vh', overflowY: 'auto',
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{
-          padding: '20px 24px', borderBottom: '1px solid #f0e6dc',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <h3 style={{ margin: 0, color: '#1a0a00', fontSize: 17 }}>{title}</h3>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none',
-            fontSize: 22, cursor: 'pointer', color: '#888', lineHeight: 1,
-          }}>×</button>
-        </div>
-        <div style={{ padding: '20px 24px' }}>{children}</div>
-      </div>
+    <div className="dc-modal-backdrop" onClick={onClose}>
+      <section
+        className="dc-modal-card"
+        style={{ maxWidth: width }}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <header className="dc-modal-header">
+          <h3 className="dc-modal-title">{title}</h3>
+
+          <button className="dc-modal-close" onClick={onClose} type="button" aria-label="Cerrar">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </header>
+
+        <div className="dc-modal-body">{children}</div>
+      </section>
     </div>
   );
 }
