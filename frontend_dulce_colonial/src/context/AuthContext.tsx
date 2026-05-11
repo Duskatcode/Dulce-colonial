@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
+import type { Role } from '../types';
 
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'ADMIN' | 'OPERADOR' | 'VISOR';
+  role: Role;
 }
 
 interface AuthContextType {

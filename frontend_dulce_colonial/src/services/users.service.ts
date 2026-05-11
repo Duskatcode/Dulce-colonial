@@ -1,11 +1,11 @@
 import api from './api';
-import { User } from '../types';
+import { Role, User } from '../types';
 
 export const usersService = {
   getAll: () =>
     api.get<User[]>('/users').then(r => r.data),
 
-  create: (data: { name: string; email: string; password: string; role: string }) =>
+  create: (data: { name: string; email: string; password: string; role: Role }) =>
     api.post<User>('/users', data).then(r => r.data),
 
   update: (id: number, data: Partial<User>) =>

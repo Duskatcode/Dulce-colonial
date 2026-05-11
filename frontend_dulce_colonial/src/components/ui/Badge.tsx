@@ -10,7 +10,6 @@ const colors: Record<string, { bg: string; color: string }> = {
 
   ADMIN: { bg: 'var(--dc-primary)', color: 'var(--dc-on-primary)' },
   OPERADOR: { bg: 'var(--dc-primary-container)', color: 'var(--dc-on-primary)' },
-  VISOR: { bg: 'var(--dc-surface-container-highest)', color: 'var(--dc-on-surface)' },
 
   BAJO_MINIMO: { bg: 'var(--dc-error-container)', color: 'var(--dc-on-error-container)' },
   OPTIMO: { bg: 'var(--dc-secondary-fixed)', color: '#351000' },
