@@ -1,0 +1,150 @@
+:root {
+  --dc-surface: #fcf9f2;
+  --dc-surface-dim: #dcdad3;
+  --dc-surface-bright: #fcf9f2;
+  --dc-surface-container-lowest: #ffffff;
+  --dc-surface-container-low: #f6f3ec;
+  --dc-surface-container: #f0eee7;
+  --dc-surface-container-high: #ebe8e1;
+  --dc-surface-container-highest: #e5e2db;
+
+  --dc-primary: #400019;
+  --dc-primary-container: #5c162e;
+  --dc-primary-fixed: #ffd9e0;
+  --dc-primary-fixed-dim: #ffb1c3;
+  --dc-on-primary: #ffffff;
+  --dc-on-primary-container: #db7c95;
+
+  --dc-secondary: #a04100;
+  --dc-secondary-container: #fd7729;
+  --dc-secondary-fixed: #ffdbcc;
+  --dc-secondary-fixed-dim: #ffb693;
+
+  --dc-error: #ba1a1a;
+  --dc-error-container: #ffdad6;
+  --dc-on-error-container: #93000a;
+
+  --dc-on-surface: #1c1c18;
+  --dc-on-surface-variant: #534246;
+  --dc-outline: #867276;
+  --dc-outline-variant: #d8c1c4;
+
+  --dc-radius-sm: 4px;
+  --dc-radius-md: 8px;
+  --dc-radius-lg: 12px;
+  --dc-radius-xl: 24px;
+
+  --dc-shadow-soft: 0 4px 20px rgba(92, 22, 46, 0.08);
+  --dc-shadow-card: 0 8px 24px rgba(92, 22, 46, 0.12);
+
+  --dc-sidebar-width: 256px;
+  --dc-topbar-height: 64px;
+}
+
+html,
+body {
+  background: var(--dc-surface);
+  color: var(--dc-on-surface);
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.dc-card {
+  background: var(--dc-surface-container-lowest);
+  border: 1px solid rgba(216, 193, 196, 0.55);
+  border-radius: var(--dc-radius-xl);
+  box-shadow: var(--dc-shadow-soft);
+}
+
+.dc-button-primary {
+  border: 0;
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-primary);
+  color: var(--dc-on-primary);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+}
+
+.dc-button-primary:hover {
+  background: var(--dc-primary-container);
+  box-shadow: var(--dc-shadow-soft);
+}
+
+.dc-button-primary:active {
+  transform: scale(0.98);
+}
+
+.dc-button-secondary {
+  border: 1px solid var(--dc-primary);
+  border-radius: var(--dc-radius-md);
+  background: transparent;
+  color: var(--dc-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dc-input {
+  width: 100%;
+  border: 1px solid var(--dc-outline-variant);
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-surface-container-lowest);
+  color: var(--dc-on-surface);
+  outline: none;
+  transition: border 160ms ease, box-shadow 160ms ease;
+}
+
+.dc-input:focus {
+  border-color: var(--dc-primary);
+  box-shadow: 0 0 0 3px rgba(64, 0, 25, 0.12);
+}
+
+.dc-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dc-chip-success {
+  background: var(--dc-secondary-fixed);
+  color: #351000;
+}
+
+.dc-chip-warning {
+  background: #ffdcc5;
+  color: #703800;
+}
+
+.dc-chip-error {
+  background: var(--dc-error-container);
+  color: var(--dc-on-error-container);
+}
+
+.dc-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dc-table th {
+  background: rgba(255, 217, 224, 0.55);
+  color: var(--dc-primary);
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+  padding: 12px;
+}
+
+.dc-table td {
+  padding: 12px;
+  border-bottom: 1px solid rgba(216, 193, 196, 0.35);
+}
+
+.dc-table tr:hover {
+  background: var(--dc-surface-container-low);
+}
