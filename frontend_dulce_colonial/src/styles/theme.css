@@ -1405,3 +1405,327 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.dc-cash-status-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  border-radius: 22px;
+  padding: 26px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(216, 193, 196, 0.6);
+  box-shadow: var(--dc-shadow-soft);
+  background:
+    radial-gradient(circle at top right, rgba(255, 217, 224, 0.5), transparent 34%),
+    var(--dc-surface-container-lowest);
+}
+
+.dc-cash-status-card.open {
+  border-color: rgba(160, 65, 0, 0.28);
+}
+
+.dc-cash-status-card.closed {
+  border-color: rgba(186, 26, 26, 0.25);
+}
+
+.dc-cash-status-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.dc-cash-status-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--dc-primary-fixed);
+  color: var(--dc-primary);
+}
+
+.dc-cash-status-card.open .dc-cash-status-icon {
+  background: var(--dc-secondary-fixed);
+  color: var(--dc-secondary);
+}
+
+.dc-cash-status-title {
+  margin: 0;
+  color: var(--dc-on-surface);
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.dc-cash-status-subtitle {
+  margin: 4px 0 0;
+  color: var(--dc-on-surface-variant);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dc-cash-balance-wrap {
+  text-align: right;
+}
+
+.dc-cash-balance {
+  margin: 0;
+  color: var(--dc-primary);
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.dc-cash-balance.negative {
+  color: var(--dc-error);
+}
+
+.dc-cash-balance-label {
+  margin-top: 4px;
+  color: var(--dc-on-surface-variant);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dc-cash-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.dc-cash-user-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.dc-cash-user-card {
+  min-width: 180px;
+  border: 1px solid rgba(216, 193, 196, 0.5);
+  border-radius: 16px;
+  background: var(--dc-surface-container-low);
+  padding: 14px 16px;
+}
+
+.dc-cash-user-name {
+  color: var(--dc-on-surface);
+  font-weight: 900;
+}
+
+.dc-cash-user-meta {
+  margin-top: 3px;
+  color: var(--dc-on-surface-variant);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dc-cash-user-total {
+  margin-top: 8px;
+  color: var(--dc-primary);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.dc-cash-user-total.negative {
+  color: var(--dc-error);
+}
+
+.dc-cash-transaction-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--dc-surface-container-low);
+  color: var(--dc-primary);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.dc-cash-transaction-type[data-type="VENTA"],
+.dc-cash-transaction-type[data-type="INGRESO"] {
+  background: var(--dc-secondary-fixed);
+  color: #351000;
+}
+
+.dc-cash-transaction-type[data-type="GASTO"],
+.dc-cash-transaction-type[data-type="DEVOLUCION"] {
+  background: var(--dc-error-container);
+  color: var(--dc-on-error-container);
+}
+
+.dc-cash-amount {
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.dc-cash-amount.credit {
+  color: var(--dc-secondary);
+}
+
+.dc-cash-amount.debit {
+  color: var(--dc-error);
+}
+
+.dc-cash-balance-after {
+  font-weight: 900;
+  color: var(--dc-on-surface);
+  white-space: nowrap;
+}
+
+.dc-cash-balance-after.negative {
+  color: var(--dc-error);
+}
+
+.dc-cash-product-note {
+  margin-top: 3px;
+  color: var(--dc-on-surface-variant);
+  font-size: 12px;
+}
+
+.dc-cash-close-summary {
+  border: 1px solid rgba(216, 193, 196, 0.55);
+  border-radius: 16px;
+  background: var(--dc-surface-container-low);
+  padding: 16px;
+}
+
+.dc-cash-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--dc-on-surface-variant);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dc-cash-info-row + .dc-cash-info-row {
+  margin-top: 10px;
+}
+
+.dc-cash-info-row strong {
+  color: var(--dc-on-surface);
+  font-weight: 900;
+}
+
+.dc-cash-type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.dc-cash-type-card {
+  border: 1px solid rgba(216, 193, 196, 0.75);
+  border-radius: 14px;
+  background: var(--dc-surface-container-lowest);
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.dc-cash-type-card:hover {
+  border-color: rgba(64, 0, 25, 0.35);
+  background: var(--dc-surface-container-low);
+}
+
+.dc-cash-type-card.active {
+  border-color: var(--dc-primary);
+  background: var(--dc-primary-fixed);
+}
+
+.dc-cash-type-card[data-type="VENTA"].active,
+.dc-cash-type-card[data-type="INGRESO"].active {
+  border-color: var(--dc-secondary);
+  background: var(--dc-secondary-fixed);
+}
+
+.dc-cash-type-card[data-type="GASTO"].active,
+.dc-cash-type-card[data-type="DEVOLUCION"].active {
+  border-color: var(--dc-error);
+  background: var(--dc-error-container);
+}
+
+.dc-cash-type-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--dc-on-surface);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dc-cash-type-card span:last-child {
+  display: block;
+  margin-top: 3px;
+  color: var(--dc-on-surface-variant);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dc-cash-product-total {
+  margin-top: 8px;
+  border-radius: 14px;
+  background: var(--dc-secondary-fixed);
+  color: #351000;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.dc-cash-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(216, 193, 196, 0.65);
+  border-radius: 14px;
+  background: var(--dc-surface-container-low);
+  padding: 12px 14px;
+  color: var(--dc-on-surface);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.dc-cash-checkbox input {
+  accent-color: var(--dc-primary);
+}
+
+.dc-button-primary:disabled,
+.dc-login-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1180px) {
+  .dc-cash-summary-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .dc-cash-status-card {
+    grid-template-columns: 1fr;
+  }
+
+  .dc-cash-balance-wrap {
+    text-align: left;
+  }
+
+  .dc-cash-type-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dc-cash-summary-grid,
+  .dc-cash-type-grid {
+    grid-template-columns: 1fr;
+  }
+}

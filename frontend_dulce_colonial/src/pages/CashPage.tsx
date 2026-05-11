@@ -1,14 +1,14 @@
-import { useState, type CSSProperties } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import InvoiceModal from '../components/invoices/InvoiceModal';
 import AppLayout from '../components/layout/AppLayout';
 import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import { cashService } from '../services/cash.service';
 import { productsService } from '../services/products.service';
-import InvoiceModal from '../components/invoices/InvoiceModal';
+import type { CashTransaction, TransactionType } from '../types';
 import type { Invoice } from '../types/invoice.types';
-import { CashTransaction, TransactionType } from '../types';
 import { getApiErrorMessage } from '../utils/errorMessage';
 
 interface CashStatusResponse {
@@ -36,6 +36,9 @@ interface CashSummaryResponse {
 }
 
 interface CashTransactionsMeta {
+  total: number;
+  page: number;
+  limit: number;
   totalPages: number;
 }
 
@@ -105,20 +108,39 @@ interface CreateTransactionResponse {
   invoice?: Invoice;
 }
 
-const TYPE_LABELS: Record<TransactionType, string> = {
-  VENTA: '🛒 Venta',
-  GASTO: '💸 Gasto',
-  INGRESO: '💰 Ingreso',
-  DEVOLUCION: '↩️ Devolución',
-  COTIZACION: '📋 Cotización',
-};
-
-const TYPE_COLORS: Record<TransactionType, string> = {
-  VENTA: '#155724',
-  GASTO: '#721c24',
-  INGRESO: '#0c5460',
-  DEVOLUCION: '#856404',
-  COTIZACION: '#383d41',
+const TX_META: Record<
+  TransactionType,
+  {
+    label: string;
+    helper: string;
+    icon: string;
+  }
+> = {
+  VENTA: {
+    label: 'Venta',
+    helper: 'Ingreso por producto o monto manual',
+    icon: 'point_of_sale',
+  },
+  GASTO: {
+    label: 'Gasto',
+    helper: 'Salida de dinero de caja',
+    icon: 'payments',
+  },
+  INGRESO: {
+    label: 'Ingreso',
+    helper: 'Entrada adicional de dinero',
+    icon: 'savings',
+  },
+  DEVOLUCION: {
+    label: 'Devolución',
+    helper: 'Dinero devuelto al cliente',
+    icon: 'undo',
+  },
+  COTIZACION: {
+    label: 'Cotización',
+    helper: 'Registro administrativo sin venta real',
+    icon: 'receipt_long',
+  },
 };
 
 const DEBIT_TYPES: TransactionType[] = ['GASTO', 'DEVOLUCION', 'COTIZACION'];
@@ -133,6 +155,33 @@ const emptyTx: TxFormState = {
   generateInvoice: false,
 };
 
+const moneyFormatter = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 0,
+});
+
+function formatMoney(value: number | string | undefined | null) {
+  const numeric = Number(value ?? 0);
+  return moneyFormatter.format(Number.isFinite(numeric) ? numeric : 0);
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+
+  return {
+    date: date.toLocaleDateString('es-CO', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+    }),
+    time: date.toLocaleTimeString('es-CO', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  };
+}
+
 function getProductTotal(
   products: ProductsCashResponse | undefined,
   productId: number,
@@ -140,8 +189,17 @@ function getProductTotal(
 ): number | null {
   const product = products?.data?.find((item) => item.id === productId);
   if (!product) return null;
+
   const quantity = Number(productQty || 1);
   return Number(product.price) * (Number.isFinite(quantity) ? quantity : 1);
+}
+
+function isDebit(type: TransactionType) {
+  return DEBIT_TYPES.includes(type);
+}
+
+function getTransactionSign(type: TransactionType) {
+  return isDebit(type) ? '-' : '+';
 }
 
 export default function CashPage() {
@@ -197,17 +255,18 @@ export default function CashPage() {
   });
 
   const openMutation = useMutation({
-    mutationFn: (data: OpenCashForm) =>
-      {
-        const openingBalance = Number(data.openingBalance || 0);
-        if (!Number.isFinite(openingBalance) || openingBalance < 0) {
-          throw new Error('El saldo inicial debe ser un número válido mayor o igual a 0.');
-        }
-        return cashService.openRegister({
-          openingBalance,
-          notes: data.notes,
-        });
-      },
+    mutationFn: (data: OpenCashForm) => {
+      const openingBalance = Number(data.openingBalance || 0);
+
+      if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+        throw new Error('El saldo inicial debe ser un número válido mayor o igual a 0.');
+      }
+
+      return cashService.openRegister({
+        openingBalance,
+        notes: data.notes,
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cash-status'] });
       qc.invalidateQueries({ queryKey: ['cash-summary'] });
@@ -215,27 +274,29 @@ export default function CashPage() {
       setOpenModal(false);
       setOpenForm({ openingBalance: '', notes: '' });
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast.error(getApiErrorMessage(error, 'Error al abrir caja'));
     },
   });
 
-  const closeMutation = useMutation<CloseRegisterResponse, any, CloseCashForm>({
-    mutationFn: (data: CloseCashForm) =>
-      {
-        const closingBalance = Number(data.closingBalance || 0);
-        if (!Number.isFinite(closingBalance) || closingBalance < 0) {
-          throw new Error('El dinero físico contado debe ser un número válido mayor o igual a 0.');
-        }
-        return cashService.closeRegister({
-          closingBalance,
-          notes: data.notes,
-        });
-      },
+  const closeMutation = useMutation<CloseRegisterResponse, unknown, CloseCashForm>({
+    mutationFn: (data: CloseCashForm) => {
+      const closingBalance = Number(data.closingBalance || 0);
+
+      if (!Number.isFinite(closingBalance) || closingBalance < 0) {
+        throw new Error('El dinero físico contado debe ser un número válido mayor o igual a 0.');
+      }
+
+      return cashService.closeRegister({
+        closingBalance,
+        notes: data.notes,
+      });
+    },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['cash-status'] });
       qc.invalidateQueries({ queryKey: ['cash-summary'] });
       toast.success(data?.differenceLabel || 'Caja cerrada');
+
       if (data?.reportUpload && !data.reportUpload.success) {
         toast.error(
           data.reportUpload.error ||
@@ -243,17 +304,21 @@ export default function CashPage() {
           { duration: 7000 },
         );
       }
+
       setCloseModal(false);
       setCloseForm({ closingBalance: '', notes: '' });
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast.error(getApiErrorMessage(error, 'Error al cerrar caja'));
     },
   });
 
-  const txMutation = useMutation<CreateTransactionResponse | CashTransaction, unknown, CreateTransactionPayload>({
-    mutationFn: (payload: CreateTransactionPayload) =>
-      cashService.createTransaction(payload),
+  const txMutation = useMutation<
+    CreateTransactionResponse | CashTransaction,
+    unknown,
+    CreateTransactionPayload
+  >({
+    mutationFn: (payload: CreateTransactionPayload) => cashService.createTransaction(payload),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['cash-status'] });
       qc.invalidateQueries({ queryKey: ['cash-summary'] });
@@ -261,14 +326,15 @@ export default function CashPage() {
       qc.invalidateQueries({ queryKey: ['products'] });
       qc.invalidateQueries({ queryKey: ['products-cash'] });
       qc.invalidateQueries({ queryKey: ['invoices'] });
+
       toast.success('Movimiento registrado');
       setTxModal(false);
       setTxForm(emptyTx);
-      const invoice =
-        'invoice' in result && result.invoice ? result.invoice : undefined;
+
+      const invoice = 'invoice' in result && result.invoice ? result.invoice : undefined;
       if (invoice) setInvoiceToShow(invoice);
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       toast.error(getApiErrorMessage(error, 'Error al registrar movimiento'));
     },
   });
@@ -276,16 +342,18 @@ export default function CashPage() {
   const isOpen = status?.status === 'ABIERTA';
   const balance = status?.balance ?? 0;
   const isNeg = balance < 0;
-
   const totalPages = transactions?.meta?.totalPages ?? 0;
+  const txRows = transactions?.data ?? [];
+
+  const selectedProductTotal = useMemo(
+    () => getProductTotal(products, txForm.productId, txForm.productQty),
+    [products, txForm.productId, txForm.productQty],
+  );
 
   const handleSubmitTransaction = () => {
     const isProductSale = txForm.type === 'VENTA' && txForm.productId > 0;
     const manualAmount = Number(txForm.amount || 0);
     const productQty = Number(txForm.productQty || 1);
-    const productTotal = isProductSale
-      ? getProductTotal(products, txForm.productId, txForm.productQty)
-      : null;
 
     if (!isProductSale && (!Number.isFinite(manualAmount) || manualAmount < 0)) {
       toast.error('El monto debe ser un número válido mayor o igual a 0.');
@@ -297,14 +365,14 @@ export default function CashPage() {
       return;
     }
 
-    if (isProductSale && (productTotal === null || productTotal <= 0)) {
+    if (isProductSale && (selectedProductTotal === null || selectedProductTotal <= 0)) {
       toast.error('No se pudo calcular el total de la venta');
       return;
     }
 
     txMutation.mutate({
       type: txForm.type,
-      amount: Number(isProductSale ? productTotal : manualAmount),
+      amount: Number(isProductSale ? selectedProductTotal : manualAmount),
       description: txForm.description,
       reference: txForm.reference || undefined,
       productId: isProductSale ? Number(txForm.productId) : undefined,
@@ -313,306 +381,284 @@ export default function CashPage() {
     });
   };
 
+  const resetTxFilter = () => {
+    setTxFilter({ type: '', page: 1 });
+  };
+
   return (
     <AppLayout title="Caja">
-      <div
-        style={{
-          background: isOpen ? '#d4edda' : '#f8d7da',
-          border: `2px solid ${isOpen ? '#28a745' : '#dc3545'}`,
-          borderRadius: 12,
-          padding: '16px 24px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 24,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 28 }}>{isOpen ? '🔓' : '🔒'}</span>
-
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#1a0a00' }}>
-              Caja {isOpen ? 'ABIERTA' : 'CERRADA'}
-            </div>
-
-            {isOpen && status?.register?.openedBy && (
-              <div style={{ fontSize: 13, color: '#555' }}>
-                Abierta por {status.register.openedBy.name}
-              </div>
-            )}
-          </div>
+      <section className="dc-page-header">
+        <div>
+          <p className="dc-page-eyebrow">Control de efectivo</p>
+          <h1 className="dc-page-title">Caja</h1>
+          <p className="dc-page-subtitle">
+            Gestiona apertura, cierre, ventas, ingresos, gastos, devoluciones y cotizaciones.
+          </p>
         </div>
 
-        <div style={{ textAlign: 'right' }}>
-          <div
-            style={{
-              fontSize: 26,
-              fontWeight: 800,
-              color: isNeg ? '#c0392b' : '#1a0a00',
-            }}
-          >
-            {isNeg ? '⚠️ ' : ''}
-            ${Number(balance).toLocaleString('es-CO')} COP
-          </div>
-
-          <div style={{ fontSize: 12, color: '#888' }}>Saldo actual</div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="dc-inventory-header-actions">
           {!isOpen ? (
-            <button onClick={() => setOpenModal(true)} style={btnPrimary}>
+            <button
+              className="dc-button-primary"
+              style={{ padding: '12px 18px' }}
+              type="button"
+              onClick={() => setOpenModal(true)}
+            >
               Abrir caja
             </button>
           ) : (
             <>
-              <button onClick={() => setTxModal(true)} style={btnPrimary}>
-                + Movimiento
+              <button
+                className="dc-button-primary"
+                style={{ padding: '12px 18px' }}
+                type="button"
+                onClick={() => setTxModal(true)}
+              >
+                Registrar movimiento
               </button>
 
               <button
+                className="dc-button-secondary"
+                style={{ padding: '12px 16px' }}
+                type="button"
                 onClick={() => setCloseModal(true)}
-                style={{ ...btnPrimary, background: '#3d1a00' }}
               >
                 Cerrar caja
               </button>
             </>
           )}
         </div>
-      </div>
+      </section>
+
+      <section className={`dc-cash-status-card ${isOpen ? 'open' : 'closed'}`}>
+        <div className="dc-cash-status-left">
+          <span className="dc-cash-status-icon">
+            <span className="material-symbols-outlined" style={{ fontSize: 34 }}>
+              {isOpen ? 'lock_open' : 'lock'}
+            </span>
+          </span>
+
+          <div>
+            <h2 className="dc-cash-status-title">
+              Caja {isOpen ? 'abierta' : 'cerrada'}
+            </h2>
+
+            <p className="dc-cash-status-subtitle">
+              {isOpen && status?.register?.openedBy
+                ? `Abierta por ${status.register.openedBy.name}`
+                : isOpen
+                  ? 'Turno activo'
+                  : 'Debes abrir caja para registrar movimientos'}
+            </p>
+          </div>
+        </div>
+
+        <div className="dc-cash-balance-wrap">
+          <p className={`dc-cash-balance ${isNeg ? 'negative' : ''}`}>
+            {formatMoney(balance)}
+          </p>
+          <div className="dc-cash-balance-label">Saldo actual</div>
+        </div>
+      </section>
 
       {isOpen && summary && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-            gap: 14,
-            marginBottom: 24,
-          }}
-        >
+        <section className="dc-cash-summary-grid" aria-label="Resumen de caja">
           <StatCard
-            icon="🛒"
+            icon="point_of_sale"
+            iconType="material"
             label="Ventas"
-            value={`$${(summary.totals?.VENTA || 0).toLocaleString('es-CO')}`}
-            color="#27ae60"
+            value={formatMoney(summary.totals?.VENTA || 0)}
+            subtitle="Ventas del turno"
+            accent="secondary"
           />
 
           <StatCard
-            icon="💸"
+            icon="payments"
+            iconType="material"
             label="Gastos"
-            value={`$${(summary.totals?.GASTO || 0).toLocaleString('es-CO')}`}
-            color="#c0392b"
+            value={formatMoney(summary.totals?.GASTO || 0)}
+            subtitle="Salidas de caja"
+            accent="error"
           />
 
           <StatCard
-            icon="💰"
+            icon="savings"
+            iconType="material"
             label="Ingresos"
-            value={`$${(summary.totals?.INGRESO || 0).toLocaleString('es-CO')}`}
-            color="#2980b9"
-          />          <StatCard
-            icon="📋"
-            label="Cotizaciones"
-            value={`$${(summary.totals?.COTIZACION || 0).toLocaleString('es-CO')}`}
-            color="#8e44ad"
+            value={formatMoney(summary.totals?.INGRESO || 0)}
+            subtitle="Entradas adicionales"
+            accent="primary"
           />
 
           <StatCard
-            icon="↩️"
-            label="Devoluciones"
-            value={`$${(summary.totals?.DEVOLUCION || 0).toLocaleString('es-CO')}`}
-            color="#e67e22"
+            icon="receipt_long"
+            iconType="material"
+            label="Cotizaciones"
+            value={formatMoney(summary.totals?.COTIZACION || 0)}
+            subtitle="Registros administrativos"
+            accent="warning"
           />
-        </div>
+
+          <StatCard
+            icon="undo"
+            iconType="material"
+            label="Devoluciones"
+            value={formatMoney(summary.totals?.DEVOLUCION || 0)}
+            subtitle="Retornos al cliente"
+            accent="error"
+          />
+        </section>
       )}
 
       {isOpen && (summary?.byUser?.length ?? 0) > 0 && (
-        <div
-          style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: 20,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
-            marginBottom: 24,
-          }}
-        >
-          <h3 style={{ margin: '0 0 14px', fontSize: 15, color: '#1a0a00' }}>
-            👤 Movimientos por usuario
-          </h3>
+        <section className="dc-dashboard-panel" style={{ marginBottom: 24 }}>
+          <header className="dc-dashboard-panel-header">
+            <h2 className="dc-dashboard-panel-title">Movimientos por usuario</h2>
+            <span className="material-symbols-outlined" style={{ color: 'var(--dc-primary)' }}>
+              group
+            </span>
+          </header>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {summary!.byUser.map((userItem) => (
-              <div
-                key={userItem.name}
-                style={{
-                  background: '#faf5f0',
-                  borderRadius: 8,
-                  padding: '10px 16px',
-                  minWidth: 160,
-                }}
-              >
-                <div style={{ fontWeight: 600, color: '#1a0a00' }}>
-                  {userItem.name}
-                </div>
-
-                <div style={{ fontSize: 13, color: '#888' }}>
-                  {userItem.count} movimientos
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: userItem.total >= 0 ? '#27ae60' : '#c0392b',
-                    marginTop: 4,
-                  }}
-                >
-                  {userItem.total >= 0 ? '+' : ''}
-                  ${userItem.total.toLocaleString('es-CO')} COP
-                </div>
-              </div>
-            ))}
+          <div className="dc-dashboard-panel-body">
+            <div className="dc-cash-user-grid">
+              {summary!.byUser.map((userItem) => (
+                <article className="dc-cash-user-card" key={userItem.name}>
+                  <div className="dc-cash-user-name">{userItem.name}</div>
+                  <div className="dc-cash-user-meta">
+                    {userItem.count} movimiento{userItem.count === 1 ? '' : 's'}
+                  </div>
+                  <div className={`dc-cash-user-total ${userItem.total < 0 ? 'negative' : ''}`}>
+                    {userItem.total >= 0 ? '+' : ''}
+                    {formatMoney(userItem.total)}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
       )}
 
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: 12,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid #f0e6dc',
-            display: 'flex',
-            gap: 10,
-            alignItems: 'center',
-          }}
-        >
-          <h3 style={{ margin: 0, fontSize: 15, color: '#1a0a00' }}>
-            Historial de movimientos
-          </h3>
+      <section className="dc-inventory-panel">
+        <div className="dc-inventory-toolbar">
+          <div className="dc-inventory-toolbar-left">
+            <h2 className="dc-dashboard-panel-title" style={{ fontSize: 20 }}>
+              Historial de movimientos
+            </h2>
+          </div>
 
-          <select
-            value={txFilter.type}
-            onChange={(e) =>
-              setTxFilter({
-                ...txFilter,
-                type: e.target.value as TxFilterState['type'],
-                page: 1,
-              })
-            }
-            style={{ ...inputStyle, width: 160, marginLeft: 'auto' }}
-          >
-            <option value="">Todos los tipos</option>
+          <div className="dc-inventory-toolbar-left">
+            <select
+              className="dc-select-filter"
+              value={txFilter.type}
+              onChange={(event) =>
+                setTxFilter({
+                  type: event.target.value as TxFilterState['type'],
+                  page: 1,
+                })
+              }
+            >
+              <option value="">Todos los tipos</option>
+              {Object.entries(TX_META).map(([key, value]) => (
+                <option key={key} value={key}>
+                  {value.label}
+                </option>
+              ))}
+            </select>
 
-            {Object.entries(TYPE_LABELS).map(([key, value]) => (
-              <option key={key} value={key}>
-                {value}
-              </option>
-            ))}
-          </select>
+            <button
+              className="dc-button-secondary"
+              style={{ padding: '10px 14px' }}
+              type="button"
+              onClick={resetTxFilter}
+            >
+              Limpiar
+            </button>
+          </div>
         </div>
 
-        {loadTx ? (
-          <p style={{ textAlign: 'center', padding: 32, color: '#aaa' }}>
-            Cargando...
-          </p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        <div className="dc-inventory-table-wrap">
+          <table className="dc-inventory-table">
             <thead>
-              <tr style={{ background: '#faf5f0' }}>
-                {['Fecha', 'Tipo', 'Descripción', 'Referencia', 'Usuario', 'Monto', 'Saldo'].map(
-                  (header) => (
-                    <th
-                      key={header}
-                      style={{
-                        padding: '10px 14px',
-                        textAlign: 'left',
-                        borderBottom: '2px solid #f0e6dc',
-                        color: '#1a0a00',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {header}
-                    </th>
-                  ),
-                )}
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Referencia</th>
+                <th>Usuario</th>
+                <th>Monto</th>
+                <th>Saldo</th>
               </tr>
             </thead>
 
             <tbody>
-              {!transactions?.data?.length ? (
+              {loadTx ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: '#aaa' }}>
-                    Sin movimientos
+                  <td colSpan={7}>
+                    <div className="dc-empty-state">Cargando movimientos de caja...</div>
+                  </td>
+                </tr>
+              ) : txRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    <div className="dc-empty-state">Sin movimientos registrados</div>
                   </td>
                 </tr>
               ) : (
-                transactions.data.map((transaction) => {
-                  const isDebit = DEBIT_TYPES.includes(transaction.type);
+                txRows.map((transaction) => {
+                  const formatted = formatDateTime(transaction.createdAt);
+                  const debit = isDebit(transaction.type);
 
                   return (
-                    <tr key={transaction.id} style={{ borderBottom: '1px solid #f5f0eb' }}>
-                      <td style={{ padding: '10px 14px', color: '#888', whiteSpace: 'nowrap' }}>
-                        {new Date(transaction.createdAt).toLocaleString('es-CO', {
-                          dateStyle: 'short',
-                          timeStyle: 'short',
-                        })}
+                    <tr key={transaction.id}>
+                      <td>
+                        <div className="dc-movement-date">{formatted.date}</div>
+                        <div className="dc-movement-time">{formatted.time}</div>
                       </td>
 
-                      <td style={{ padding: '10px 14px' }}>
-                        <span
-                          style={{
-                            background: `${TYPE_COLORS[transaction.type]}22`,
-                            color: TYPE_COLORS[transaction.type],
-                            padding: '2px 10px',
-                            borderRadius: 20,
-                            fontSize: 12,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {TYPE_LABELS[transaction.type]}
+                      <td>
+                        <span className="dc-cash-transaction-type" data-type={transaction.type}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                            {TX_META[transaction.type].icon}
+                          </span>
+                          {TX_META[transaction.type].label}
                         </span>
                       </td>
 
-                      <td style={{ padding: '10px 14px' }}>
-                        <div>{transaction.description}</div>
-
+                      <td>
+                        <div className="dc-inventory-name">{transaction.description}</div>
                         {transaction.product && (
-                          <div style={{ fontSize: 12, color: '#888' }}>
+                          <div className="dc-cash-product-note">
                             {transaction.product.name} × {transaction.productQty}
                           </div>
                         )}
                       </td>
 
-                      <td style={{ padding: '10px 14px', color: '#888' }}>
-                        {transaction.reference || '—'}
+                      <td>{transaction.reference || '—'}</td>
+
+                      <td>
+                        <span className="dc-movement-user">
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                            person
+                          </span>
+                          {transaction.user.name}
+                        </span>
                       </td>
 
-                      <td style={{ padding: '10px 14px' }}>{transaction.user.name}</td>
-
-                      <td
-                        style={{
-                          padding: '10px 14px',
-                          fontWeight: 700,
-                          color: isDebit ? '#c0392b' : '#27ae60',
-                        }}
-                      >
-                        {isDebit ? '-' : '+'}${Number(transaction.amount).toLocaleString('es-CO')}
+                      <td>
+                        <span className={`dc-cash-amount ${debit ? 'debit' : 'credit'}`}>
+                          {getTransactionSign(transaction.type)}
+                          {formatMoney(transaction.amount)}
+                        </span>
                       </td>
 
-                      <td
-                        style={{
-                          padding: '10px 14px',
-                          color:
-                            Number(transaction.balanceAfter) < 0 ? '#c0392b' : '#1a0a00',
-                          fontWeight: 600,
-                        }}
-                      >
-                        ${Number(transaction.balanceAfter).toLocaleString('es-CO')}
+                      <td>
+                        <span
+                          className={`dc-cash-balance-after ${
+                            Number(transaction.balanceAfter) < 0 ? 'negative' : ''
+                          }`}
+                        >
+                          {formatMoney(transaction.balanceAfter)}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -620,140 +666,132 @@ export default function CashPage() {
               )}
             </tbody>
           </table>
-        )}
+        </div>
 
         {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: 16 }}>
-            {Array.from({ length: totalPages }, (_, index) => (
-              <button
-                key={index}
-                onClick={() =>
-                  setTxFilter({
-                    ...txFilter,
-                    page: index + 1,
-                  })
-                }
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: 6,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: txFilter.page === index + 1 ? '#c0392b' : '#f0e6dc',
-                  color: txFilter.page === index + 1 ? '#fff' : '#333',
-                }}
-              >
-                {index + 1}
-              </button>
-            ))}
-          </div>
+          <footer className="dc-inventory-footer">
+            <span>
+              Página {txFilter.page} de {totalPages}
+            </span>
+
+            <div className="dc-pagination">
+              {Array.from({ length: totalPages }, (_, index) => (
+                <button
+                  key={index}
+                  className="dc-pagination-button"
+                  type="button"
+                  onClick={() =>
+                    setTxFilter({
+                      ...txFilter,
+                      page: index + 1,
+                    })
+                  }
+                  style={{
+                    background:
+                      txFilter.page === index + 1
+                        ? 'var(--dc-primary)'
+                        : 'var(--dc-surface-container-lowest)',
+                    color:
+                      txFilter.page === index + 1
+                        ? 'var(--dc-on-primary)'
+                        : 'var(--dc-primary)',
+                  }}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+          </footer>
         )}
-      </div>
+      </section>
 
       <Modal open={openModal} onClose={() => setOpenModal(false)} title="Abrir caja">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle}>Saldo inicial (COP)</label>
-            <input
-              type="number"
-              value={openForm.openingBalance}
-              onChange={(e) =>
-                setOpenForm({
-                  ...openForm,
-                  openingBalance: e.target.value,
-                })
-              }
-              onFocus={(e) => e.currentTarget.select()}
-              inputMode="decimal"
-              style={inputStyle}
-              placeholder="Ej: 100000"
-            />
-          </div>
+        <div className="dc-form-stack">
+          <Field
+            label="Saldo inicial (COP)"
+            type="number"
+            value={openForm.openingBalance}
+            numeric
+            placeholder="Ej: 100000"
+            onChange={(value) =>
+              setOpenForm({
+                ...openForm,
+                openingBalance: value,
+              })
+            }
+          />
 
-          <div>
-            <label style={labelStyle}>Notas (opcional)</label>
-            <input
-              value={openForm.notes}
-              onChange={(e) =>
-                setOpenForm({
-                  ...openForm,
-                  notes: e.target.value,
-                })
-              }
-              style={inputStyle}
-              placeholder="Ej: Caja del turno mañana"
-            />
-          </div>
+          <Field
+            label="Notas (opcional)"
+            value={openForm.notes}
+            placeholder="Ej: Caja del turno mañana"
+            onChange={(value) =>
+              setOpenForm({
+                ...openForm,
+                notes: value,
+              })
+            }
+          />
 
           <button
+            className="dc-login-button"
+            type="button"
             onClick={() => openMutation.mutate(openForm)}
             disabled={openMutation.isPending}
-            style={btnPrimary}
           >
-            {openMutation.isPending ? 'Abriendo...' : '🔓 Abrir caja'}
+            {openMutation.isPending ? 'Abriendo...' : 'Abrir caja'}
           </button>
         </div>
       </Modal>
 
       <Modal open={closeModal} onClose={() => setCloseModal(false)} title="Cerrar caja">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="dc-form-stack">
           {summary && (
-            <div style={{ background: '#faf5f0', borderRadius: 8, padding: 14, fontSize: 14 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: 6,
-                }}
-              >
-                <span style={{ color: '#888' }}>Saldo esperado en sistema:</span>
-                <strong>${Number(summary.currentBalance).toLocaleString('es-CO')} COP</strong>
+            <div className="dc-cash-close-summary">
+              <div className="dc-cash-info-row">
+                <span>Saldo esperado en sistema</span>
+                <strong>{formatMoney(summary.currentBalance)}</strong>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#888' }}>Transacciones:</span>
+              <div className="dc-cash-info-row">
+                <span>Transacciones</span>
                 <strong>{summary.transactionCount}</strong>
               </div>
             </div>
           )}
 
-          <div>
-            <label style={labelStyle}>Dinero físico contado (COP)</label>
-            <input
-              type="number"
-              value={closeForm.closingBalance}
-              onChange={(e) =>
-                setCloseForm({
-                  ...closeForm,
-                  closingBalance: e.target.value,
-                })
-              }
-              onFocus={(e) => e.currentTarget.select()}
-              inputMode="decimal"
-              style={inputStyle}
-              placeholder="Ej: 125000"
-            />
-          </div>
+          <Field
+            label="Dinero físico contado (COP)"
+            type="number"
+            value={closeForm.closingBalance}
+            numeric
+            placeholder="Ej: 125000"
+            onChange={(value) =>
+              setCloseForm({
+                ...closeForm,
+                closingBalance: value,
+              })
+            }
+          />
 
-          <div>
-            <label style={labelStyle}>Notas de cierre (opcional)</label>
-            <input
-              value={closeForm.notes}
-              onChange={(e) =>
-                setCloseForm({
-                  ...closeForm,
-                  notes: e.target.value,
-                })
-              }
-              style={inputStyle}
-            />
-          </div>
+          <Field
+            label="Notas de cierre (opcional)"
+            value={closeForm.notes}
+            onChange={(value) =>
+              setCloseForm({
+                ...closeForm,
+                notes: value,
+              })
+            }
+          />
 
           <button
+            className="dc-login-button"
+            type="button"
             onClick={() => closeMutation.mutate(closeForm)}
             disabled={closeMutation.isPending}
-            style={{ ...btnPrimary, background: '#3d1a00' }}
           >
-            {closeMutation.isPending ? 'Cerrando...' : '🔒 Cerrar caja'}
+            {closeMutation.isPending ? 'Cerrando...' : 'Cerrar caja'}
           </button>
         </div>
       </Modal>
@@ -762,19 +800,22 @@ export default function CashPage() {
         open={txModal}
         onClose={() => setTxModal(false)}
         title="Registrar movimiento"
-        width={520}
+        width={720}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="dc-form-stack">
           <div>
-            <label style={labelStyle}>Tipo de movimiento</label>
+            <label className="dc-form-label">Tipo de movimiento</label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              {Object.entries(TYPE_LABELS).map(([key, label]) => {
+            <div className="dc-cash-type-grid">
+              {Object.entries(TX_META).map(([key, meta]) => {
                 const typedKey = key as TransactionType;
 
                 return (
                   <button
                     key={typedKey}
+                    className={`dc-cash-type-card ${txForm.type === typedKey ? 'active' : ''}`}
+                    data-type={typedKey}
+                    type="button"
                     onClick={() =>
                       setTxForm({
                         ...txForm,
@@ -784,23 +825,12 @@ export default function CashPage() {
                         generateInvoice: false,
                       })
                     }
-                    style={{
-                      padding: '8px',
-                      borderRadius: 8,
-                      border: '2px solid',
-                      borderColor:
-                        txForm.type === typedKey ? TYPE_COLORS[typedKey] : '#e0d5cc',
-                      background:
-                        txForm.type === typedKey
-                          ? `${TYPE_COLORS[typedKey]}15`
-                          : '#fff',
-                      color: txForm.type === typedKey ? TYPE_COLORS[typedKey] : '#555',
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      fontWeight: 600,
-                    }}
                   >
-                    {label}
+                    <span className="material-symbols-outlined" style={{ fontSize: 24 }}>
+                      {meta.icon}
+                    </span>
+                    <strong>{meta.label}</strong>
+                    <span>{meta.helper}</span>
                   </button>
                 );
               })}
@@ -810,84 +840,58 @@ export default function CashPage() {
           {txForm.type === 'VENTA' && (
             <>
               <div>
-                <label style={labelStyle}>Producto (opcional)</label>
+                <label className="dc-form-label">Producto (opcional)</label>
                 <select
+                  className="dc-form-input"
                   value={txForm.productId}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setTxForm({
                       ...txForm,
-                      productId: Number(e.target.value),
+                      productId: Number(event.target.value),
                     })
                   }
-                  style={inputStyle}
                 >
                   <option value={0}>Sin producto — monto manual</option>
 
                   {products?.data?.map((product) => (
                     <option key={product.id} value={product.id}>
-                      {product.name} — ${Number(product.price).toLocaleString('es-CO')} c/u
-                      {' '} (stock: {product.stock})
+                      {product.name} — {formatMoney(product.price)} c/u — stock: {product.stock}
                     </option>
                   ))}
                 </select>
               </div>
 
               {txForm.productId > 0 && (
-                <div>
-                  <label style={labelStyle}>Cantidad</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={txForm.productQty}
-                    onChange={(e) =>
-                      setTxForm({
-                        ...txForm,
-                        productQty: e.target.value,
-                      })
-                    }
-                    onFocus={(e) => e.currentTarget.select()}
-                    style={inputStyle}
-                  />
+                <Field
+                  label="Cantidad"
+                  type="number"
+                  value={txForm.productQty}
+                  numeric
+                  placeholder="1"
+                  onChange={(value) =>
+                    setTxForm({
+                      ...txForm,
+                      productQty: value,
+                    })
+                  }
+                />
+              )}
 
-                  {(() => {
-                    const total = getProductTotal(products, txForm.productId, txForm.productQty);
-
-                    if (total === null) return null;
-
-                    return (
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: '#27ae60',
-                          marginTop: 4,
-                          fontWeight: 600,
-                        }}
-                      >
-                        Total: ${total.toLocaleString('es-CO')} COP
-                      </div>
-                    );
-                  })()}
+              {txForm.productId > 0 && selectedProductTotal !== null && (
+                <div className="dc-cash-product-total">
+                  Total calculado: {formatMoney(selectedProductTotal)}
                 </div>
               )}
 
               {txForm.productId > 0 && (
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontSize: 14,
-                    color: '#3d1a00',
-                    fontWeight: 600,
-                  }}
-                >
+                <label className="dc-cash-checkbox">
                   <input
                     type="checkbox"
                     checked={txForm.generateInvoice}
-                    onChange={(e) =>
+                    onChange={(event) =>
                       setTxForm({
                         ...txForm,
-                        generateInvoice: e.target.checked,
+                        generateInvoice: event.target.checked,
                       })
                     }
                   />
@@ -898,74 +902,62 @@ export default function CashPage() {
           )}
 
           {(txForm.type !== 'VENTA' || txForm.productId === 0) && (
-            <div>
-              <label style={labelStyle}>Monto (COP)</label>
-              <input
+            <Field
+              label="Monto (COP)"
               type="number"
               value={txForm.amount}
-              onChange={(e) =>
+              numeric
+              placeholder="Ej: 25000"
+              onChange={(value) =>
                 setTxForm({
                   ...txForm,
-                  amount: e.target.value,
+                  amount: value,
                 })
               }
-              onFocus={(e) => e.currentTarget.select()}
-              inputMode="decimal"
-              style={inputStyle}
-              placeholder="Ej: 25000"
             />
-            </div>
           )}
 
-          <div>
-            <label style={labelStyle}>Descripción</label>
-            <input
-              value={txForm.description}
-              onChange={(e) =>
-                setTxForm({
-                  ...txForm,
-                  description: e.target.value,
-                })
-              }
-              style={inputStyle}
-              placeholder={
-                txForm.type === 'GASTO'
-                  ? 'Ej: Pago arriendo local'
-                  : txForm.type === 'VENTA'
-                    ? 'Ej: Venta 5 helados'
-                    : txForm.type === 'INGRESO'
-                      ? 'Ej: Abono cliente'
-                      : txForm.type === 'COTIZACION'
-                        ? 'Ej: Retiro caja chica'
-                        : 'Ej: Devolución pedido #12'
-              }
-            />
-          </div>
+          <Field
+            label="Descripción"
+            value={txForm.description}
+            placeholder={
+              txForm.type === 'GASTO'
+                ? 'Ej: Pago arriendo local'
+                : txForm.type === 'VENTA'
+                  ? 'Ej: Venta 5 helados'
+                  : txForm.type === 'INGRESO'
+                    ? 'Ej: Abono cliente'
+                    : txForm.type === 'COTIZACION'
+                      ? 'Ej: Cotización pedido especial'
+                      : 'Ej: Devolución pedido #12'
+            }
+            onChange={(value) =>
+              setTxForm({
+                ...txForm,
+                description: value,
+              })
+            }
+          />
 
-          <div>
-            <label style={labelStyle}>Referencia (opcional)</label>
-            <input
-              value={txForm.reference}
-              onChange={(e) =>
-                setTxForm({
-                  ...txForm,
-                  reference: e.target.value,
-                })
-              }
-              style={inputStyle}
-              placeholder="Ej: FAC-001, recibo, etc."
-            />
-          </div>
+          <Field
+            label="Referencia (opcional)"
+            value={txForm.reference}
+            placeholder="Ej: FAC-001, recibo, etc."
+            onChange={(value) =>
+              setTxForm({
+                ...txForm,
+                reference: value,
+              })
+            }
+          />
 
           <button
+            className="dc-login-button"
+            type="button"
             onClick={handleSubmitTransaction}
             disabled={txMutation.isPending || !txForm.description}
-            style={{
-              ...btnPrimary,
-              opacity: !txForm.description ? 0.5 : 1,
-            }}
           >
-            {txMutation.isPending ? 'Registrando...' : '✅ Registrar movimiento'}
+            {txMutation.isPending ? 'Registrando...' : 'Registrar movimiento'}
           </button>
         </div>
       </Modal>
@@ -977,31 +969,34 @@ export default function CashPage() {
   );
 }
 
-const labelStyle: CSSProperties = {
-  display: 'block',
-  fontSize: 13,
-  color: '#555',
-  marginBottom: 4,
-  fontWeight: 500,
-};
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  padding: '9px 12px',
-  borderRadius: 8,
-  border: '1.5px solid #e0d5cc',
-  fontSize: 14,
-  boxSizing: 'border-box',
-};
-
-const btnPrimary: CSSProperties = {
-  padding: '11px 20px',
-  background: '#c0392b',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 8,
-  cursor: 'pointer',
-  fontWeight: 600,
-  fontSize: 15,
-  width: '100%',
-};
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  numeric = false,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  numeric?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="dc-form-label">{label}</label>
+      <input
+        className="dc-form-input"
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={numeric ? (event) => event.currentTarget.select() : undefined}
+        inputMode={numeric ? 'decimal' : undefined}
+        min={numeric ? 0 : undefined}
+        placeholder={placeholder ?? (numeric ? '0' : undefined)}
+      />
+    </div>
+  );
+}
