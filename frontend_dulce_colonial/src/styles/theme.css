@@ -2422,3 +2422,112 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.dc-user-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dc-user-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--dc-primary-fixed);
+  color: var(--dc-primary);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  font-weight: 900;
+}
+
+.dc-user-name {
+  color: var(--dc-on-surface);
+  font-weight: 900;
+}
+
+.dc-user-email {
+  margin-top: 2px;
+  color: var(--dc-on-surface-variant);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dc-user-role-card-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.dc-user-role-card {
+  border: 1px solid rgba(216, 193, 196, 0.75);
+  border-radius: 14px;
+  background: var(--dc-surface-container-lowest);
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border 160ms ease, background 160ms ease;
+}
+
+.dc-user-role-card.active {
+  border-color: var(--dc-primary);
+  background: var(--dc-primary-fixed);
+}
+
+.dc-user-role-card strong {
+  display: block;
+  color: var(--dc-on-surface);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.dc-user-role-card span {
+  display: block;
+  margin-top: 3px;
+  color: var(--dc-on-surface-variant);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.dc-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dc-activity-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid rgba(216, 193, 196, 0.52);
+  border-radius: 14px;
+  background: var(--dc-surface-container-low);
+  padding: 12px 14px;
+}
+
+.dc-activity-action {
+  color: var(--dc-on-surface);
+  font-weight: 900;
+}
+
+.dc-activity-meta {
+  margin-top: 3px;
+  color: var(--dc-on-surface-variant);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dc-activity-date {
+  color: var(--dc-on-surface-variant);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .dc-user-role-card-grid,
+  .dc-activity-item {
+    grid-template-columns: 1fr;
+  }
+}
