@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo } from 'react';
 import toast from 'react-hot-toast';
 import type { Invoice } from '../../types/invoice.types';
 
@@ -30,6 +30,7 @@ const clean = (value: unknown, fallback = 'No registrado') => {
   ) {
     return fallback;
   }
+
   return String(value);
 };
 
@@ -49,11 +50,10 @@ const escapeHtml = (value: unknown) =>
 export default function InvoiceModal({ invoice, onClose }: Props) {
   const issuedAt = useMemo(() => {
     const date = new Date(invoice.createdAt);
-    return Number.isNaN(date.getTime())
-      ? 'No registrado'
-      : dateFormatter.format(date);
+    return Number.isNaN(date.getTime()) ? 'No registrado' : dateFormatter.format(date);
   }, [invoice.createdAt]);
 
+  const items = invoice.items ?? [];
   const subtotal = Number(invoice.subtotal ?? invoice.total ?? 0);
   const discount = Number(invoice.discount ?? 0);
   const tax = Number(invoice.tax ?? 0);
@@ -63,6 +63,7 @@ export default function InvoiceModal({ invoice, onClose }: Props) {
 
   const handlePrint = () => {
     const printWindow = window.open('', '_blank', 'width=860,height=1100');
+
     if (!printWindow) {
       toast.error('No se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas.');
       return;
@@ -72,6 +73,7 @@ export default function InvoiceModal({ invoice, onClose }: Props) {
     printWindow.document.write(buildPrintableHtml(invoice));
     printWindow.document.close();
     printWindow.focus();
+
     window.setTimeout(() => {
       try {
         printWindow.print();
@@ -82,26 +84,41 @@ export default function InvoiceModal({ invoice, onClose }: Props) {
   };
 
   return (
-    <div style={overlayStyle} role="dialog" aria-modal="true">
-      <div style={cardStyle}>
-        <div id="invoice-document" style={invoiceStyle}>
-          <header style={headerStyle}>
+    <div className="dc-invoice-overlay" role="dialog" aria-modal="true">
+      <div className="dc-invoice-card">
+        <div id="invoice-document" className="dc-invoice-document">
+          <header className="dc-invoice-document-header">
             <div>
-              <div style={brandStyle}>Dulce Colonial</div>
-              <div style={subtitleStyle}>Recibo interno de venta</div>
-              <div style={legalNoteStyle}>
+              <div className="dc-invoice-brand-row">
+                <span className="dc-invoice-brand-mark">
+                  <span className="material-symbols-outlined" style={{ fontSize: 32 }}>
+                    bakery_dining
+                  </span>
+                </span>
+
+                <div>
+                  <div className="dc-invoice-brand">Dulce Colonial</div>
+                  <div className="dc-invoice-document-subtitle">Recibo interno de venta</div>
+                </div>
+              </div>
+
+              <div className="dc-invoice-legal">
                 Comprobante interno. No corresponde a factura electrónica DIAN.
               </div>
             </div>
-            <div style={numberBoxStyle}>
-              <div style={mutedStyle}>Número</div>
+
+            <div className="dc-invoice-number-box">
+              <div className="dc-invoice-muted">Número</div>
               <strong>{clean(invoice.number)}</strong>
-              <div style={{ ...mutedStyle, marginTop: 8 }}>Fecha y hora</div>
+
+              <div className="dc-invoice-muted" style={{ marginTop: 10 }}>
+                Fecha y hora
+              </div>
               <span>{issuedAt}</span>
             </div>
           </header>
 
-          <section style={gridStyle}>
+          <section className="dc-invoice-info-grid">
             <InfoBlock
               title="Datos del negocio"
               rows={[
@@ -111,6 +128,7 @@ export default function InvoiceModal({ invoice, onClose }: Props) {
                 ['Teléfono / correo', 'No registrado'],
               ]}
             />
+
             <InfoBlock
               title="Datos del cliente"
               rows={[
@@ -118,6 +136,7 @@ export default function InvoiceModal({ invoice, onClose }: Props) {
                 ['Documento', customerDocument],
               ]}
             />
+
             <InfoBlock
               title="Caja"
               rows={[
@@ -128,31 +147,31 @@ export default function InvoiceModal({ invoice, onClose }: Props) {
             />
           </section>
 
-          <section style={{ marginTop: 18 }}>
-            <h3 style={sectionTitleStyle}>Productos</h3>
-            <table style={tableStyle}>
+          <section style={{ marginTop: 22 }}>
+            <h3 className="dc-invoice-section-title">Productos</h3>
+
+            <table className="dc-invoice-table">
               <thead>
                 <tr>
-                  <th style={thStyle}>Producto</th>
-                  <th style={{ ...thStyle, textAlign: 'center' }}>Cantidad</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Precio unitario</th>
-                  <th style={{ ...thStyle, textAlign: 'right' }}>Subtotal</th>
+                  <th>Producto</th>
+                  <th style={{ textAlign: 'center' }}>Cantidad</th>
+                  <th style={{ textAlign: 'right' }}>Precio unitario</th>
+                  <th style={{ textAlign: 'right' }}>Subtotal</th>
                 </tr>
               </thead>
+
               <tbody>
-                {invoice.items.length === 0 ? (
+                {items.length === 0 ? (
                   <tr>
-                    <td style={tdStyle} colSpan={4}>Sin productos registrados</td>
+                    <td colSpan={4}>Sin productos registrados</td>
                   </tr>
                 ) : (
-                  invoice.items.map((item) => (
+                  items.map((item) => (
                     <tr key={item.id}>
-                      <td style={tdStyle}>{clean(item.productName ?? item.description)}</td>
-                      <td style={{ ...tdStyle, textAlign: 'center' }}>{item.quantity}</td>
-                      <td style={{ ...tdStyle, textAlign: 'right' }}>{money(item.unitPrice)}</td>
-                      <td style={{ ...tdStyle, textAlign: 'right' }}>
-                        {money(item.subtotal ?? item.total)}
-                      </td>
+                      <td>{clean(item.productName ?? item.description)}</td>
+                      <td style={{ textAlign: 'center' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right' }}>{money(item.unitPrice)}</td>
+                      <td style={{ textAlign: 'right' }}>{money(item.subtotal ?? item.total)}</td>
                     </tr>
                   ))
                 )}
@@ -160,28 +179,29 @@ export default function InvoiceModal({ invoice, onClose }: Props) {
             </table>
           </section>
 
-          <section style={totalsStyle}>
+          <section className="dc-invoice-totals">
             <TotalRow label="Subtotal" value={money(subtotal)} />
             <TotalRow label="Descuento" value={discount > 0 ? money(discount) : 'No aplica'} />
             <TotalRow label="Impuesto" value={tax > 0 ? money(tax) : 'No aplica'} />
-            <div style={grandTotalStyle}>
+            <div className="dc-invoice-grand-total">
               <span>Total</span>
               <strong>{money(total)}</strong>
             </div>
           </section>
 
-          <footer style={footerStyle}>
+          <footer className="dc-invoice-footer">
             <div>{clean(invoice.notes, 'Gracias por su compra.')}</div>
             <strong>Documento generado por Dulce Colonial.</strong>
           </footer>
         </div>
 
-        <div style={actionsStyle}>
-          <button type="button" onClick={handlePrint} style={buttonStyle('#155724')}>
-            Imprimir / Guardar PDF
-          </button>
-          <button type="button" onClick={onClose} style={buttonStyle('#c0392b')}>
+        <div className="dc-invoice-actions">
+          <button className="dc-button-secondary" type="button" onClick={onClose} style={{ padding: '11px 16px' }}>
             Cerrar
+          </button>
+
+          <button className="dc-button-primary" type="button" onClick={handlePrint} style={{ padding: '11px 16px' }}>
+            Imprimir / Guardar PDF
           </button>
         </div>
       </div>
@@ -197,11 +217,12 @@ function InfoBlock({
   rows: Array<[string, string]>;
 }) {
   return (
-    <div style={infoBlockStyle}>
-      <h3 style={sectionTitleStyle}>{title}</h3>
+    <div className="dc-invoice-info-block">
+      <h3 className="dc-invoice-section-title">{title}</h3>
+
       {rows.map(([label, value]) => (
-        <div key={label} style={infoRowStyle}>
-          <span style={mutedStyle}>{label}</span>
+        <div key={label} className="dc-invoice-info-row">
+          <span className="dc-invoice-muted">{label}</span>
           <strong>{value}</strong>
         </div>
       ))}
@@ -211,7 +232,7 @@ function InfoBlock({
 
 function TotalRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={totalRowStyle}>
+    <div className="dc-invoice-total-row">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
@@ -220,14 +241,14 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 
 function buildPrintableHtml(invoice: Invoice) {
   const date = new Date(invoice.createdAt);
-  const issuedAt = Number.isNaN(date.getTime())
-    ? 'No registrado'
-    : dateFormatter.format(date);
+  const issuedAt = Number.isNaN(date.getTime()) ? 'No registrado' : dateFormatter.format(date);
+  const items = invoice.items ?? [];
   const subtotal = Number(invoice.subtotal ?? invoice.total ?? 0);
   const discount = Number(invoice.discount ?? 0);
   const tax = Number(invoice.tax ?? 0);
   const total = Number(invoice.total ?? subtotal - discount + tax);
-  const rows = invoice.items
+
+  const rows = items
     .map(
       (item) => `
         <tr>
@@ -249,28 +270,28 @@ function buildPrintableHtml(invoice: Invoice) {
         <style>
           @page { size: A4; margin: 14mm; }
           * { box-sizing: border-box; }
-          body { margin: 0; font-family: Arial, sans-serif; color: #1f2937; background: #fff; }
-          .invoice { width: 100%; max-width: 760px; margin: 0 auto; border: 1px solid #e7d8c9; padding: 28px; }
-          .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #92400e; padding-bottom: 18px; }
-          .brand { font-size: 28px; font-weight: 800; color: #3d1a00; }
-          .subtitle { font-size: 15px; font-weight: 700; color: #92400e; margin-top: 4px; }
-          .note { margin-top: 8px; font-size: 11px; color: #6b7280; }
-          .number { min-width: 210px; border: 1px solid #eadfd6; padding: 12px; text-align: right; }
-          .muted { color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+          body { margin: 0; font-family: Arial, sans-serif; color: #1c1c18; background: #fff; }
+          .invoice { width: 100%; max-width: 760px; margin: 0 auto; border: 1px solid #d8c1c4; padding: 28px; }
+          .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #400019; padding-bottom: 18px; }
+          .brand { font-size: 30px; font-weight: 800; color: #400019; }
+          .subtitle { font-size: 15px; font-weight: 700; color: #a04100; margin-top: 4px; }
+          .note { margin-top: 8px; font-size: 11px; color: #534246; }
+          .number { min-width: 210px; border: 1px solid #d8c1c4; padding: 12px; text-align: right; }
+          .muted { color: #534246; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
           .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
-          .block { border: 1px solid #eadfd6; padding: 12px; min-height: 112px; }
-          h3 { margin: 0 0 10px; font-size: 13px; color: #3d1a00; }
+          .block { border: 1px solid #d8c1c4; padding: 12px; min-height: 112px; }
+          h3 { margin: 0 0 10px; font-size: 13px; color: #400019; }
           .info-row { margin-bottom: 8px; }
           .info-row strong { display: block; font-size: 13px; margin-top: 2px; }
           table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-          th { background: #92400e; color: #fff; padding: 9px; font-size: 12px; text-align: left; }
-          td { border-bottom: 1px solid #f0e6dc; padding: 9px; font-size: 12px; }
+          th { background: #400019; color: #fff; padding: 9px; font-size: 12px; text-align: left; }
+          td { border-bottom: 1px solid #d8c1c4; padding: 9px; font-size: 12px; }
           .right { text-align: right; }
           .center { text-align: center; }
-          .totals { width: 310px; margin: 18px 0 0 auto; border: 1px solid #eadfd6; }
-          .total-row { display: flex; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #f0e6dc; }
-          .grand { display: flex; justify-content: space-between; padding: 12px; background: #3d1a00; color: #fff; font-size: 18px; font-weight: 800; }
-          .footer { margin-top: 22px; padding-top: 14px; border-top: 1px solid #eadfd6; text-align: center; color: #6b7280; font-size: 12px; }
+          .totals { width: 310px; margin: 18px 0 0 auto; border: 1px solid #d8c1c4; }
+          .total-row { display: flex; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #d8c1c4; }
+          .grand { display: flex; justify-content: space-between; padding: 12px; background: #400019; color: #fff; font-size: 18px; font-weight: 800; }
+          .footer { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8c1c4; text-align: center; color: #534246; font-size: 12px; }
           @media print { .invoice { border: none; padding: 0; } }
         </style>
       </head>
@@ -282,6 +303,7 @@ function buildPrintableHtml(invoice: Invoice) {
               <div class="subtitle">Recibo interno de venta</div>
               <div class="note">Comprobante interno. No corresponde a factura electrónica DIAN.</div>
             </div>
+
             <div class="number">
               <div class="muted">Número</div>
               <strong>${escapeHtml(invoice.number)}</strong>
@@ -289,24 +311,51 @@ function buildPrintableHtml(invoice: Invoice) {
               <span>${escapeHtml(issuedAt)}</span>
             </div>
           </header>
+
           <section class="grid">
-            <div class="block"><h3>Datos del negocio</h3><div class="info-row"><span class="muted">Nombre</span><strong>Dulce Colonial</strong></div><div class="info-row"><span class="muted">Identificación</span><strong>No registrado</strong></div><div class="info-row"><span class="muted">Dirección</span><strong>No registrado</strong></div></div>
-            <div class="block"><h3>Datos del cliente</h3><div class="info-row"><span class="muted">Cliente</span><strong>${escapeHtml(clean(invoice.customerName, 'Consumidor final'))}</strong></div><div class="info-row"><span class="muted">Documento</span><strong>${escapeHtml(clean(invoice.customerDocument))}</strong></div></div>
-            <div class="block"><h3>Caja</h3><div class="info-row"><span class="muted">Cajero</span><strong>${escapeHtml(clean(invoice.userName))}</strong></div><div class="info-row"><span class="muted">Método de pago</span><strong>${escapeHtml(clean(invoice.paymentMethod, 'No aplica'))}</strong></div><div class="info-row"><span class="muted">Referencia</span><strong>${escapeHtml(clean(invoice.reference ?? invoice.number, 'No aplica'))}</strong></div></div>
+            <div class="block">
+              <h3>Datos del negocio</h3>
+              <div class="info-row"><span class="muted">Nombre</span><strong>Dulce Colonial</strong></div>
+              <div class="info-row"><span class="muted">Identificación</span><strong>No registrado</strong></div>
+              <div class="info-row"><span class="muted">Dirección</span><strong>No registrado</strong></div>
+            </div>
+
+            <div class="block">
+              <h3>Datos del cliente</h3>
+              <div class="info-row"><span class="muted">Cliente</span><strong>${escapeHtml(clean(invoice.customerName, 'Consumidor final'))}</strong></div>
+              <div class="info-row"><span class="muted">Documento</span><strong>${escapeHtml(clean(invoice.customerDocument))}</strong></div>
+            </div>
+
+            <div class="block">
+              <h3>Caja</h3>
+              <div class="info-row"><span class="muted">Cajero</span><strong>${escapeHtml(clean(invoice.userName))}</strong></div>
+              <div class="info-row"><span class="muted">Método de pago</span><strong>${escapeHtml(clean(invoice.paymentMethod, 'No aplica'))}</strong></div>
+              <div class="info-row"><span class="muted">Referencia</span><strong>${escapeHtml(clean(invoice.reference ?? invoice.number, 'No aplica'))}</strong></div>
+            </div>
           </section>
+
           <section style="margin-top: 18px;">
             <h3>Productos</h3>
             <table>
-              <thead><tr><th>Producto</th><th class="center">Cantidad</th><th class="right">Precio unitario</th><th class="right">Subtotal</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th class="center">Cantidad</th>
+                  <th class="right">Precio unitario</th>
+                  <th class="right">Subtotal</th>
+                </tr>
+              </thead>
               <tbody>${rows || '<tr><td colspan="4">Sin productos registrados</td></tr>'}</tbody>
             </table>
           </section>
+
           <section class="totals">
             <div class="total-row"><span>Subtotal</span><strong>${escapeHtml(money(subtotal))}</strong></div>
             <div class="total-row"><span>Descuento</span><strong>${discount > 0 ? escapeHtml(money(discount)) : 'No aplica'}</strong></div>
             <div class="total-row"><span>Impuesto</span><strong>${tax > 0 ? escapeHtml(money(tax)) : 'No aplica'}</strong></div>
             <div class="grand"><span>Total</span><strong>${escapeHtml(money(total))}</strong></div>
           </section>
+
           <footer class="footer">
             <div>${escapeHtml(clean(invoice.notes, 'Gracias por su compra.'))}</div>
             <strong>Documento generado por Dulce Colonial.</strong>
@@ -316,69 +365,3 @@ function buildPrintableHtml(invoice: Invoice) {
     </html>
   `;
 }
-
-const overlayStyle: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.58)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 20,
-  zIndex: 1000,
-};
-
-const cardStyle: CSSProperties = {
-  background: '#f8f3ee',
-  borderRadius: 8,
-  padding: 18,
-  width: 'min(980px, 96vw)',
-  maxHeight: '94vh',
-  overflow: 'auto',
-  boxShadow: '0 18px 44px rgba(0,0,0,0.22)',
-};
-
-const invoiceStyle: CSSProperties = {
-  background: '#fff',
-  border: '1px solid #e7d8c9',
-  padding: 28,
-  maxWidth: 820,
-  margin: '0 auto',
-  color: '#1f2937',
-};
-
-const headerStyle: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: 24,
-  borderBottom: '2px solid #92400e',
-  paddingBottom: 18,
-};
-
-const brandStyle: CSSProperties = { fontSize: 28, fontWeight: 800, color: '#3d1a00' };
-const subtitleStyle: CSSProperties = { fontSize: 15, fontWeight: 700, color: '#92400e', marginTop: 4 };
-const legalNoteStyle: CSSProperties = { fontSize: 12, color: '#6b7280', marginTop: 8 };
-const mutedStyle: CSSProperties = { color: '#6b7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em' };
-const numberBoxStyle: CSSProperties = { minWidth: 220, border: '1px solid #eadfd6', padding: 12, textAlign: 'right' };
-const gridStyle: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginTop: 18 };
-const infoBlockStyle: CSSProperties = { border: '1px solid #eadfd6', padding: 12, minHeight: 112 };
-const sectionTitleStyle: CSSProperties = { margin: '0 0 10px', color: '#3d1a00', fontSize: 13 };
-const infoRowStyle: CSSProperties = { marginBottom: 8 };
-const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse' };
-const thStyle: CSSProperties = { background: '#92400e', color: '#fff', padding: 9, fontSize: 12, textAlign: 'left' };
-const tdStyle: CSSProperties = { borderBottom: '1px solid #f0e6dc', padding: 9, fontSize: 12 };
-const totalsStyle: CSSProperties = { width: 330, margin: '18px 0 0 auto', border: '1px solid #eadfd6' };
-const totalRowStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '9px 12px', borderBottom: '1px solid #f0e6dc' };
-const grandTotalStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: 12, background: '#3d1a00', color: '#fff', fontSize: 18 };
-const footerStyle: CSSProperties = { marginTop: 22, paddingTop: 14, borderTop: '1px solid #eadfd6', textAlign: 'center', color: '#6b7280', fontSize: 12 };
-const actionsStyle: CSSProperties = { display: 'flex', justifyContent: 'flex-end', gap: 8, maxWidth: 820, margin: '14px auto 0' };
-
-const buttonStyle = (background: string): CSSProperties => ({
-  border: 'none',
-  borderRadius: 6,
-  background,
-  color: '#fff',
-  padding: '10px 14px',
-  cursor: 'pointer',
-  fontWeight: 700,
-});

@@ -1,14 +1,15 @@
 import {
-  BadRequestException,
   Controller,
   Get,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { DriveService } from './drive.service';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { DriveService } from './drive.service';
 
 @ApiTags('Drive')
 @Controller('google')
@@ -49,15 +50,19 @@ export class DriveAuthController {
 
   @Get('callback')
   @ApiOperation({ summary: 'Callback OAuth2 para Google Drive' })
-  async callback(@Query('code') code?: string) {
-    if (!code) {
-      throw new BadRequestException('El parámetro code es obligatorio');
+  async callback(
+    @Query('code') code: string | undefined,
+    @Query('error') error: string | undefined,
+    @Res() res: Response,
+  ) {
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost';
+
+    if (error || !code) {
+      return res.redirect(`${frontendUrl}/drive/settings?drive=error`);
     }
 
     await this.driveService.handleOAuthCallback(code);
-    return {
-      message: 'Autorización completada. Puedes regresar a la consola.',
-      connected: this.driveService.ready,
-    };
+
+    return res.redirect(`${frontendUrl}/?drive=connected`);
   }
 }

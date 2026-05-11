@@ -4,26 +4,36 @@ interface StatCardProps {
   icon: string;
   color?: string;
   subtitle?: string;
+  accent?: 'primary' | 'secondary' | 'warning' | 'error';
+  iconType?: 'emoji' | 'material';
 }
 
-export default function StatCard({ label, value, icon, color = '#c0392b', subtitle }: StatCardProps) {
+export default function StatCard({
+  label,
+  value,
+  icon,
+  subtitle,
+  accent = 'primary',
+  iconType = 'emoji',
+}: StatCardProps) {
   return (
-    <div style={{
-      background: '#fff',
-      borderRadius: 12,
-      padding: '20px 24px',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
-      borderLeft: `4px solid ${color}`,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 16,
-    }}>
-      <span style={{ fontSize: 32 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize: 26, fontWeight: 700, color: '#1a0a00' }}>{value}</div>
-        <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{label}</div>
-        {subtitle && <div style={{ fontSize: 12, color: color, marginTop: 2 }}>{subtitle}</div>}
+    <article className="dc-stat-card" data-accent={accent}>
+      <div className="dc-stat-card-header">
+        <p className="dc-stat-label">{label}</p>
+
+        <div className="dc-stat-icon" data-accent={accent}>
+          {iconType === 'material' ? (
+            <span className="material-symbols-outlined">{icon}</span>
+          ) : (
+            <span style={{ fontSize: 24 }}>{icon}</span>
+          )}
+        </div>
       </div>
-    </div>
+
+      <div className="dc-stat-value-wrap">
+        <p className="dc-stat-value">{value}</p>
+        {subtitle && <p className="dc-stat-subtitle">{subtitle}</p>}
+      </div>
+    </article>
   );
 }
