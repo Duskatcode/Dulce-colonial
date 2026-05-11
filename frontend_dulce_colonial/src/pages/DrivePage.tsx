@@ -1,153 +1,326 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import AppLayout from '../components/layout/AppLayout';
+import StatCard from '../components/ui/StatCard';
 import { reportsService } from '../services/reports.service';
 import { getApiErrorMessage } from '../utils/errorMessage';
 
-const FOLDERS = [
-  { key: 'daily',  label: '📅 Reportes diarios',   folder: 'reportes-diarios'   },
-  { key: 'weekly', label: '📆 Reportes semanales',  folder: 'reportes-semanales' },
-  { key: 'manual', label: '🖐 Respaldos manuales',  folder: 'respaldos-manuales' },
+type DriveFolderKey = 'daily' | 'weekly' | 'manual';
+type ManualReportType = 'stock' | 'movements' | 'lowstock';
+
+interface DriveStatusResponse {
+  connected: boolean;
+}
+
+interface DriveFile {
+  id: string;
+  name?: string;
+  createdTime?: string;
+  size?: number | string;
+  webViewLink?: string;
+}
+
+const FOLDERS: Array<{
+  key: DriveFolderKey;
+  label: string;
+  subtitle: string;
+  icon: string;
+}> = [
+  {
+    key: 'daily',
+    label: 'Reportes diarios',
+    subtitle: 'Archivos generados por operación diaria',
+    icon: 'today',
+  },
+  {
+    key: 'weekly',
+    label: 'Reportes semanales',
+    subtitle: 'Consolidación periódica de reportes',
+    icon: 'calendar_month',
+  },
+  {
+    key: 'manual',
+    label: 'Respaldos manuales',
+    subtitle: 'Reportes generados bajo demanda',
+    icon: 'folder_managed',
+  },
 ];
+
+const MANUAL_REPORTS: Array<{
+  type: ManualReportType;
+  label: string;
+  icon: string;
+}> = [
+  { type: 'stock', label: 'Stock', icon: 'inventory_2' },
+  { type: 'movements', label: 'Movimientos', icon: 'swap_vert' },
+  { type: 'lowstock', label: 'Bajo inventario', icon: 'warning' },
+];
+
+const dateFormatter = new Intl.DateTimeFormat('es-CO', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+function formatDate(value?: string) {
+  if (!value) return '—';
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
+}
+
+function formatSize(value?: number | string) {
+  const numeric = Number(value ?? 0);
+
+  if (!Number.isFinite(numeric) || numeric <= 0) return '—';
+
+  if (numeric >= 1024 * 1024) {
+    return `${(numeric / 1024 / 1024).toFixed(2)} MB`;
+  }
+
+  return `${(numeric / 1024).toFixed(1)} KB`;
+}
+
+function getFileIcon(fileName?: string) {
+  if (fileName?.toLowerCase().endsWith('.pdf')) return 'picture_as_pdf';
+  if (fileName?.toLowerCase().endsWith('.xlsx')) return 'table_chart';
+  return 'description';
+}
 
 export default function DrivePage() {
   const qc = useQueryClient();
-  const [activeFolder, setActiveFolder] = useState<'daily' | 'weekly' | 'manual'>('daily');
+  const [activeFolder, setActiveFolder] = useState<DriveFolderKey>('daily');
 
-  const { data: status } = useQuery({
+  const { data: status, isLoading: loadingStatus } = useQuery<DriveStatusResponse>({
     queryKey: ['drive-status'],
-    queryFn:  reportsService.getDriveStatus,
+    queryFn: reportsService.getDriveStatus,
     refetchInterval: 30_000,
   });
 
-  const { data: files, isLoading } = useQuery({
+  const isConnected = status?.connected === true;
+
+  const { data: driveFiles, isLoading: loadingFiles } = useQuery<DriveFile[]>({
     queryKey: ['drive-files', activeFolder],
-    queryFn:  () => reportsService.getDriveFiles(activeFolder),
-    enabled:  status?.connected === true,
+    queryFn: () => reportsService.getDriveFiles(activeFolder),
+    enabled: isConnected,
   });
 
+  const files = driveFiles ?? [];
+
   const manualMutation = useMutation({
-    mutationFn: (type: 'stock' | 'movements' | 'lowstock') =>
-      reportsService.triggerManual(type),
+    mutationFn: (type: ManualReportType) => reportsService.triggerManual(type),
     onSuccess: () => {
       toast.success('Reporte generado y subido a Drive');
       qc.invalidateQueries({ queryKey: ['drive-files'] });
+      qc.invalidateQueries({ queryKey: ['report-history'] });
     },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al generar reporte')),
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error, 'Error al generar reporte'));
+    },
   });
+
+  const activeFolderMeta = useMemo(
+    () => FOLDERS.find((folder) => folder.key === activeFolder) ?? FOLDERS[0],
+    [activeFolder],
+  );
 
   return (
     <AppLayout title="Google Drive">
-      {/* Estado de conexión */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        background: '#fff', borderRadius: 12, padding: '14px 20px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.07)', marginBottom: 24,
-        justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 10, height: 10, borderRadius: '50%',
-            background: status?.connected ? '#27ae60' : '#e74c3c',
-          }} />
-          <span style={{ fontWeight: 600, color: '#1a0a00' }}>
-            Google Drive — {status?.connected ? 'Conectado' : 'Desconectado'}
-          </span>
+      <section className="dc-page-header">
+        <div>
+          <p className="dc-page-eyebrow">Archivos y respaldos</p>
+          <h1 className="dc-page-title">Google Drive</h1>
+          <p className="dc-page-subtitle">
+            Revisa reportes subidos a Drive y genera respaldos manuales desde el panel administrativo.
+          </p>
         </div>
-        {status?.connected && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            {[
-              { type: 'stock'     as const, label: '📦 Stock'       },
-              { type: 'movements' as const, label: '↕️ Movimientos' },
-              { type: 'lowstock'  as const, label: '⚠️ Bajo stock'  },
-            ].map(btn => (
-              <button key={btn.type}
-                onClick={() => manualMutation.mutate(btn.type)}
+
+        <div className="dc-inventory-header-actions">
+          <Link className="dc-button-secondary" style={{ padding: '12px 16px', textDecoration: 'none' }} to="/drive/settings">
+            Configurar Drive
+          </Link>
+        </div>
+      </section>
+
+      <section className="dc-drive-status-strip">
+        <div className="dc-drive-status-main">
+          <span
+            className={`dc-drive-led ${
+              loadingStatus ? '' : isConnected ? 'connected' : 'disconnected'
+            }`}
+          />
+
+          <div>
+            <strong>Google Drive</strong>
+            <span>
+              {loadingStatus
+                ? 'Verificando estado...'
+                : isConnected
+                  ? 'Conectado y listo para subir reportes'
+                  : 'Desconectado'}
+            </span>
+          </div>
+        </div>
+
+        {isConnected && (
+          <div className="dc-drive-manual-grid">
+            {MANUAL_REPORTS.map((report) => (
+              <button
+                key={report.type}
+                className="dc-drive-manual-button"
+                type="button"
                 disabled={manualMutation.isPending}
-                style={{
-                  padding: '7px 14px', border: 'none', borderRadius: 6,
-                  background: '#3d1a00', color: '#fff', cursor: 'pointer', fontSize: 13,
-                  opacity: manualMutation.isPending ? 0.6 : 1,
-                }}>
-                {btn.label}
+                onClick={() => manualMutation.mutate(report.type)}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                  {report.icon}
+                </span>
+                {manualMutation.isPending ? 'Generando...' : report.label}
               </button>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {!status?.connected ? (
-        <div style={{ background: '#fff3cd', borderRadius: 12, padding: 24, textAlign: 'center' }}>
-          <p style={{ color: '#856404', margin: 0, fontSize: 15 }}>
-            ⚠️ Google Drive no está configurado.<br />
-            Sigue las instrucciones del README para autorizar la aplicación.
+      {!isConnected ? (
+        <section className="dc-drive-warning-card">
+          <span className="material-symbols-outlined">cloud_off</span>
+          <h2 className="dc-drive-warning-title">Google Drive no está configurado</h2>
+          <p className="dc-drive-warning-text">
+            Autoriza la integración para habilitar subida automática de reportes y respaldos manuales.
           </p>
-        </div>
+
+          <Link className="dc-button-primary" style={{ padding: '12px 18px', textDecoration: 'none' }} to="/drive/settings">
+            Ir a configuración
+          </Link>
+        </section>
       ) : (
         <>
-          {/* Tabs de carpetas */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-            {FOLDERS.map(f => (
-              <button key={f.key}
-                onClick={() => setActiveFolder(f.key as any)}
-                style={{
-                  padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                  fontWeight: 500, fontSize: 14,
-                  background: activeFolder === f.key ? '#c0392b' : '#f0e6dc',
-                  color:      activeFolder === f.key ? '#fff'    : '#3d1a00',
-                }}>
-                {f.label}
+          <section className="dc-inventory-stats" aria-label="Resumen de archivos Drive">
+            <StatCard
+              icon="folder"
+              iconType="material"
+              label="Carpeta activa"
+              value={activeFolderMeta.label}
+              subtitle={activeFolderMeta.subtitle}
+              accent="primary"
+            />
+
+            <StatCard
+              icon="description"
+              iconType="material"
+              label="Archivos visibles"
+              value={files.length}
+              subtitle="Según carpeta seleccionada"
+              accent="secondary"
+            />
+
+            <StatCard
+              icon="cloud_done"
+              iconType="material"
+              label="Estado"
+              value="Conectado"
+              subtitle="Drive disponible"
+              accent="warning"
+            />
+          </section>
+
+          <nav className="dc-drive-folder-tabs" aria-label="Carpetas de Google Drive">
+            {FOLDERS.map((folder) => (
+              <button
+                key={folder.key}
+                className={`dc-drive-folder-tab ${activeFolder === folder.key ? 'active' : ''}`}
+                type="button"
+                onClick={() => setActiveFolder(folder.key)}
+              >
+                <span className="dc-drive-folder-icon">
+                  <span className="material-symbols-outlined">{folder.icon}</span>
+                </span>
+
+                <span>
+                  <span className="dc-drive-folder-title">{folder.label}</span>
+                  <span className="dc-drive-folder-subtitle">{folder.subtitle}</span>
+                </span>
               </button>
             ))}
-          </div>
+          </nav>
 
-          {/* Lista de archivos */}
-          <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.07)', overflow: 'hidden' }}>
-            {isLoading ? (
-              <p style={{ textAlign: 'center', padding: 32, color: '#aaa' }}>Cargando archivos...</p>
-            ) : !files || files.length === 0 ? (
-              <p style={{ textAlign: 'center', padding: 32, color: '#aaa' }}>No hay archivos en esta carpeta</p>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <section className="dc-inventory-panel">
+            <div className="dc-dashboard-panel-header">
+              <h2 className="dc-dashboard-panel-title">Archivos en Drive</h2>
+              <span className="material-symbols-outlined" style={{ color: 'var(--dc-primary)' }}>
+                cloud
+              </span>
+            </div>
+
+            <div className="dc-inventory-table-wrap">
+              <table className="dc-inventory-table">
                 <thead>
-                  <tr style={{ background: '#faf5f0' }}>
-                    {['Archivo', 'Fecha', 'Tamaño', 'Ver en Drive'].map(h => (
-                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', borderBottom: '2px solid #f0e6dc', color: '#1a0a00' }}>{h}</th>
-                    ))}
+                  <tr>
+                    <th>Archivo</th>
+                    <th>Fecha</th>
+                    <th>Tamaño</th>
+                    <th style={{ textAlign: 'right' }}>Ver en Drive</th>
                   </tr>
                 </thead>
+
                 <tbody>
-                  {files.map((f: any) => (
-                    <tr key={f.id} style={{ borderBottom: '1px solid #f5f0eb' }}>
-                      <td style={{ padding: '10px 16px' }}>
-                        <span style={{ fontSize: 16, marginRight: 8 }}>
-                          {f.name?.endsWith('.pdf') ? '📄' : '📊'}
-                        </span>
-                        {f.name}
-                      </td>
-                      <td style={{ padding: '10px 16px', color: '#888' }}>
-                        {f.createdTime
-                          ? new Date(f.createdTime).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
-                          : '—'}
-                      </td>
-                      <td style={{ padding: '10px 16px', color: '#888' }}>
-                        {f.size ? `${(f.size / 1024).toFixed(1)} KB` : '—'}
-                      </td>
-                      <td style={{ padding: '10px 16px' }}>
-                        {f.webViewLink ? (
-                          <a href={f.webViewLink} target="_blank" rel="noreferrer"
-                            style={{ color: '#c0392b', fontWeight: 600, textDecoration: 'none', fontSize: 13 }}>
-                            Abrir ↗
-                          </a>
-                        ) : '—'}
+                  {loadingFiles ? (
+                    <tr>
+                      <td colSpan={4}>
+                        <div className="dc-empty-state">Cargando archivos...</div>
                       </td>
                     </tr>
-                  ))}
+                  ) : files.length === 0 ? (
+                    <tr>
+                      <td colSpan={4}>
+                        <div className="dc-empty-state">No hay archivos en esta carpeta</div>
+                      </td>
+                    </tr>
+                  ) : (
+                    files.map((file) => (
+                      <tr key={file.id}>
+                        <td>
+                          <div className="dc-drive-file-cell">
+                            <span className="dc-drive-file-icon">
+                              <span className="material-symbols-outlined">
+                                {getFileIcon(file.name)}
+                              </span>
+                            </span>
+
+                            <div>
+                              <div className="dc-drive-file-name">{file.name ?? 'Archivo sin nombre'}</div>
+                              <div className="dc-drive-file-meta">ID: {file.id}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td>{formatDate(file.createdTime)}</td>
+
+                        <td>{formatSize(file.size)}</td>
+
+                        <td style={{ textAlign: 'right' }}>
+                          {file.webViewLink ? (
+                            <a
+                              className="dc-drive-open-link"
+                              href={file.webViewLink}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Abrir Drive
+                            </a>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
-            )}
-          </div>
+            </div>
+          </section>
         </>
       )}
     </AppLayout>
