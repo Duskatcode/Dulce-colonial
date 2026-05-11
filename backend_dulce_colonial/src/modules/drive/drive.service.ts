@@ -1,16 +1,26 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google, drive_v3, Auth } from 'googleapis';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import { Readable } from 'stream';
+
+interface GoogleCredentials {
+  client_secret: string;
+  client_id: string;
+  redirect_uris?: string[];
+}
 
 interface GoogleCredentialsFile {
-  installed: {
-    client_secret: string;
-    client_id: string;
-    redirect_uris?: string[];
-  };
+  installed?: GoogleCredentials;
+  web?: GoogleCredentials;
 }
 
 @Injectable()
@@ -41,31 +51,58 @@ export class DriveService implements OnModuleInit {
         ),
       );
 
-      if (!fs.existsSync(credentialsPath)) {
+      let clientId: string | undefined;
+      let clientSecret: string | undefined;
+      let redirectUri: string | undefined;
+
+      if (fs.existsSync(credentialsPath)) {
+        const credentialsFile = JSON.parse(
+          fs.readFileSync(credentialsPath, 'utf8'),
+        ) as GoogleCredentialsFile;
+        const credentials = credentialsFile.web ?? credentialsFile.installed;
+
+        if (!credentials) {
+          this.logger.warn(
+            '⚠️  google-credentials.json no tiene formato válido. Drive desactivado.',
+          );
+          return;
+        }
+
+        clientId = credentials.client_id;
+        clientSecret = credentials.client_secret;
+        redirectUri =
+          this.config.get<string>('GOOGLE_REDIRECT_URI') ??
+          credentials.redirect_uris?.[0] ??
+          'http://localhost:3000/google/callback';
+      } else {
         this.logger.warn(
-          '⚠️  google-credentials.json no encontrado. Drive desactivado.',
+          '⚠️  google-credentials.json no encontrado. Usando variables de entorno para Drive.',
+        );
+        clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
+        clientSecret = this.config.get<string>('GOOGLE_CLIENT_SECRET');
+        redirectUri =
+          this.config.get<string>('GOOGLE_REDIRECT_URI') ??
+          'http://localhost:3000/google/callback';
+      }
+
+      if (!clientId || !clientSecret) {
+        this.logger.warn(
+          '⚠️  Google Drive no configurado — falta client_id o client_secret',
         );
         this.logger.warn(
-          '    Sigue las instrucciones del README para configurarlo.',
+          '    Verifica config/google-credentials.json o las variables de entorno.',
         );
         return;
       }
 
-      const credentials = JSON.parse(
-        fs.readFileSync(credentialsPath, 'utf8'),
-      ) as GoogleCredentialsFile;
-      const { client_secret, client_id, redirect_uris } = credentials.installed;
-
-      this.redirectUri =
-        this.config.get<string>('GOOGLE_REDIRECT_URI') ??
-        redirect_uris?.[0] ??
-        'http://localhost:3000/google/callback';
+      this.redirectUri = redirectUri;
 
       this.auth = new google.auth.OAuth2(
-        client_id,
-        client_secret,
+        clientId,
+        clientSecret,
         this.redirectUri,
       );
+      this.logger.log('✅ Google OAuth2 client inicializado correctamente');
 
       this.tokenPath = path.resolve(
         process.cwd(),
@@ -270,6 +307,7 @@ export class DriveService implements OnModuleInit {
     const subfolders = [
       'reportes-diarios',
       'reportes-semanales',
+      'reportes-mensuales',
       'respaldos-manuales',
     ];
 
@@ -312,11 +350,15 @@ export class DriveService implements OnModuleInit {
     return folder.data.id;
   }
 
-  // ─── Subir archivo ────────────────────────────────────────────────────────
-  async uploadFile(
+  // ─── Subir archivo desde disco ────────────────────────────────────────────
+  async uploadFileToFolder(
     localPath: string,
     fileName: string,
-    folderKey: 'reportes-diarios' | 'reportes-semanales' | 'respaldos-manuales',
+    folderKey:
+      | 'reportes-diarios'
+      | 'reportes-semanales'
+      | 'reportes-mensuales'
+      | 'respaldos-manuales',
     mimeType: string,
   ): Promise<{ id: string; webViewLink: string }> {
     if (!this.isReady) {
@@ -351,6 +393,81 @@ export class DriveService implements OnModuleInit {
     return { id, webViewLink };
   }
 
+  async uploadBufferToFolder(
+    fileName: string,
+    buffer: Buffer,
+    folderKey:
+      | 'reportes-diarios'
+      | 'reportes-semanales'
+      | 'reportes-mensuales'
+      | 'respaldos-manuales',
+    mimeType: string,
+  ): Promise<{ id: string; webViewLink: string; folderKey: string }> {
+    if (!this.isReady) {
+      throw new Error('Google Drive no está configurado o autorizado');
+    }
+
+    const folderId = this.folderIds[folderKey];
+    if (!folderId) {
+      throw new Error(`Carpeta "${folderKey}" no encontrada en Drive`);
+    }
+
+    const response = await this.drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [folderId],
+      },
+      media: {
+        mimeType,
+        body: Readable.from(buffer),
+      },
+      fields: 'id, webViewLink',
+    });
+
+    const id = response.data.id ?? '';
+    const webViewLink = response.data.webViewLink ?? '';
+
+    if (!id) {
+      throw new Error(`Drive no retornó ID para el archivo: ${fileName}`);
+    }
+
+    this.logger.log(`☁️  Subido a Drive: ${fileName} → ${folderKey}`);
+    return { id, webViewLink, folderKey };
+  }
+
+  // ─── Subir buffer temporal ────────────────────────────────────────────────
+  async uploadFile(
+    fileName: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<string | null> {
+    const auth = this.auth;
+    if (!this.hasValidCredentials() || !auth) {
+      console.log(
+        '[DriveService] Upload skipped — no credentials for:',
+        fileName,
+      );
+      return null;
+    }
+
+    const drive = google.drive({ version: 'v3', auth });
+    const stream = Readable.from(buffer);
+
+    const response = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        mimeType,
+      },
+      media: {
+        mimeType,
+        body: stream,
+      },
+      fields: 'id',
+    });
+
+    return response.data.id ?? '';
+  }
+
   // ─── Listar archivos ──────────────────────────────────────────────────────
   async listFiles(folderKey: string): Promise<drive_v3.Schema$File[]> {
     if (!this.isReady) return [];
@@ -381,7 +498,10 @@ export class DriveService implements OnModuleInit {
 
   getAuthUrl() {
     if (!this.auth) {
-      throw new Error('Google Drive no está configurado todavía');
+      throw new HttpException(
+        'Google Drive no está configurado. Verifica las credenciales en config/google-credentials.json',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     }
 
     const url = this.auth.generateAuthUrl({
@@ -425,6 +545,10 @@ export class DriveService implements OnModuleInit {
     await this.loadToken(this.tokenPath);
 
     return this.getConnectionStatus();
+  }
+
+  private hasValidCredentials() {
+    return this.isReady && !!this.auth;
   }
 
   // ─── Estado de la conexión ────────────────────────────────────────────────

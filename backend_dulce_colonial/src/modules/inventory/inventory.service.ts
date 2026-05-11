@@ -95,9 +95,12 @@ export class InventoryService {
   }
 
   async getRawBelowMinimum() {
-    return this.prisma.$queryRaw<
-      { id: number; name: string; quantity: number; minStock: number }[]
-    >`SELECT id, name, quantity, min_stock AS "minStock" FROM "Ingredient" WHERE quantity < min_stock ORDER BY quantity ASC`;
+    const rows = await this.prisma.ingredient.findMany({
+      orderBy: { quantity: 'asc' },
+    });
+    return rows
+      .filter((ingredient) => ingredient.quantity < ingredient.minStock)
+      .map((ingredient) => this.formatIngredientResponse(ingredient));
   }
 
   async adjustQuantity(id: number, dto: AdjustQuantityDto) {

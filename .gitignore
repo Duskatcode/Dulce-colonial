@@ -112,3 +112,30 @@ backend_dulce_colonial/config/google-token.json
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# Local generated files
+node_modules/
+dist/
+build/
+reports/
+*.log
+.DS_Store
+
+# Environment files
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Secrets / credentials
+google-credentials.json
+google-token.json
+**/google-credentials.json
+**/google-token.json
+**/*.pem
+**/*.key
+
+# Local backups
+.local-backups/
+*.backup.*
+Dockerfile.backup.*

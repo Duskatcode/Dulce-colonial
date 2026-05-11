@@ -6,6 +6,7 @@ import {
   IsPositive,
   IsEnum,
   IsInt,
+  IsBoolean,
   Min,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -46,4 +47,13 @@ export class CreateTransactionDto {
   @IsInt()
   @Min(1)
   productQty?: number;
+
+  @ApiProperty({
+    required: false,
+    example: false,
+    description: 'Genera factura en la misma operación de venta',
+  })
+  @IsOptional()
+  @IsBoolean()
+  generateInvoice?: boolean;
 }

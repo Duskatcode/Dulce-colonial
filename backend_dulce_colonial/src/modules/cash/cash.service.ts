@@ -5,17 +5,51 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { format } from 'date-fns';
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { AlertsGateway } from '../alerts/alerts.gateway';
 import { OpenRegisterDto } from './dto/open-register.dto';
 import { CloseRegisterDto } from './dto/close-register.dto';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
+import { ExcelReportService } from '../reports/excel-report.service';
+import { DriveService } from '../drive/drive.service';
 
 // Tipos que restan de la caja
 const DEBIT_TYPES = ['GASTO', 'DEVOLUCION', 'COTIZACION'];
 // Tipos que suman a la caja
 const CREDIT_TYPES = ['VENTA', 'INGRESO'];
+
+type ReportUploadResult = {
+  success: boolean;
+  destination?: string;
+  fileName?: string;
+  driveId?: string;
+  driveUrl?: string;
+  error?: string;
+};
+
+const invoiceInclude = {
+  items: {
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          price: true,
+        },
+      },
+    },
+  },
+  cashRegister: true,
+  user: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+} as const;
 
 @Injectable()
 export class CashService {
@@ -24,6 +58,8 @@ export class CashService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly alertsGateway: AlertsGateway,
+    private readonly excelReportService: ExcelReportService,
+    private readonly driveService: DriveService,
   ) {}
 
   // ─── Estado actual de la caja ─────────────────────────────────────────────
@@ -123,11 +159,13 @@ export class CashService {
       difference,
       closedBy: closed.closedBy?.name,
     });
+    const reportUpload = await this.generateAndUploadExcelReport(register.id);
 
     return {
       ...closed,
       expectedBalance,
       difference,
+      reportUpload,
       differenceLabel:
         difference === 0
           ? 'Cuadre exacto ✅'
@@ -139,58 +177,32 @@ export class CashService {
 
   // ─── Registrar transacción ────────────────────────────────────────────────
   async createTransaction(dto: CreateTransactionDto, userId: number) {
-    const register = await this.prisma.cashRegister.findFirst({
-      where: { status: 'ABIERTA' },
-    });
-
-    if (!register) {
-      throw new BadRequestException(
-        'No hay una caja abierta. Abre la caja antes de registrar movimientos.',
-      );
-    }
-
-    const currentBalance = await this.getCurrentBalance(register.id);
-    const isDebit = DEBIT_TYPES.includes(dto.type);
-
-    // Calcular monto final según tipo de transacción
-    let amount = dto.amount;
-
-    // Si es venta con producto, calcular monto por precio × cantidad
-    if (dto.type === 'VENTA' && dto.productId && dto.productQty) {
-      const product = await this.prisma.product.findUnique({
-        where: { id: dto.productId },
+    const result = await this.prisma.$transaction(async (tx) => {
+      const register = await tx.cashRegister.findFirst({
+        where: { status: 'ABIERTA' },
       });
-      if (!product)
-        throw new NotFoundException(`Producto #${dto.productId} no encontrado`);
-      if (product.stock < dto.productQty) {
+
+      if (!register) {
         throw new BadRequestException(
-          `Stock insuficiente. Disponible: ${product.stock}, solicitado: ${dto.productQty}`,
+          'No hay una caja abierta. Abre la caja antes de registrar movimientos.',
         );
       }
-      amount = Number(product.price) * dto.productQty;
-    }
 
-    // Calcular nuevo balance
-    const balanceAfter = isDebit
-      ? currentBalance - amount
-      : currentBalance + amount;
-
-    // Advertencia si queda en negativo (no bloquea)
-    if (balanceAfter < 0) {
-      this.logger.warn(
-        `⚠️  Caja en negativo después de transacción: $${balanceAfter.toLocaleString('es-CO')} COP`,
-      );
-      this.alertsGateway.emitNotification('cash_negative', {
-        balance: balanceAfter,
-        transaction: dto.description,
+      const lastTransaction = await tx.cashTransaction.findFirst({
+        where: { cashRegisterId: register.id },
+        orderBy: { createdAt: 'desc' },
       });
-    }
+      const currentBalance = lastTransaction
+        ? Number(lastTransaction.balanceAfter)
+        : Number(register.openingBalance);
+      const isDebit = DEBIT_TYPES.includes(dto.type);
+      let amount = dto.amount;
+      let productPrice: Prisma.Decimal | undefined;
+      let invoice:
+        | Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>
+        | undefined;
 
-    // Transacción atómica: registrar movimiento + descontar stock si aplica
-    const transaction = await this.prisma.$transaction(async (tx) => {
-      // Descontar stock si es venta de producto
       if (dto.type === 'VENTA' && dto.productId && dto.productQty) {
-        // FIX 1: guard null — findUnique puede retornar null si el producto no existe
         const product = await tx.product.findUnique({
           where: { id: dto.productId },
         });
@@ -198,6 +210,19 @@ export class CashService {
           throw new NotFoundException(
             `Producto #${dto.productId} no encontrado`,
           );
+        if (!product.price) {
+          throw new BadRequestException(
+            `El producto "${product.name}" no tiene un precio configurado.`,
+          );
+        }
+        if (product.stock < dto.productQty) {
+          throw new BadRequestException(
+            `Stock insuficiente. Disponible: ${product.stock}, solicitado: ${dto.productQty}`,
+          );
+        }
+
+        productPrice = product.price;
+        amount = Number(product.price) * dto.productQty;
 
         const newStock = product.stock - dto.productQty;
         await tx.product.update({
@@ -208,8 +233,6 @@ export class CashService {
           },
         });
 
-        // Registrar movimiento de inventario
-        // FIX 2: 'reason' no existe en el modelo Movement — se usa 'notes' en su lugar
         await tx.movement.create({
           data: {
             type: 'SALIDA',
@@ -222,23 +245,60 @@ export class CashService {
             productId: dto.productId,
           },
         });
+
+        if (dto.generateInvoice) {
+          const invoiceNumber = await this.generateInvoiceNumber(tx);
+          invoice = await tx.invoice.create({
+            data: {
+              number: invoiceNumber,
+              cashRegisterId: register.id,
+              userId,
+              subtotal: new Prisma.Decimal(amount),
+              total: new Prisma.Decimal(amount),
+              items: {
+                create: [
+                  {
+                    productId: product.id,
+                    description: product.name,
+                    quantity: dto.productQty,
+                    unitPrice: product.price,
+                    total: new Prisma.Decimal(amount),
+                  },
+                ],
+              },
+            },
+            include: invoiceInclude,
+          });
+        }
       }
 
-      // Crear la transacción de caja
-      return tx.cashTransaction.create({
+      if (dto.generateInvoice && dto.type !== 'VENTA') {
+        throw new BadRequestException(
+          'Solo las ventas de producto pueden generar factura automática.',
+        );
+      }
+
+      if (dto.generateInvoice && (!dto.productId || !dto.productQty)) {
+        throw new BadRequestException(
+          'Selecciona un producto para generar factura.',
+        );
+      }
+
+      const balanceAfter = isDebit
+        ? currentBalance - amount
+        : currentBalance + amount;
+
+      const transaction = await tx.cashTransaction.create({
         data: {
           cashRegisterId: register.id,
           type: dto.type,
           amount,
           description: dto.description,
-          reference: dto.reference,
+          reference: invoice?.number ?? dto.reference,
           userId,
           productId: dto.productId ?? undefined,
           productQty: dto.productQty ?? undefined,
-          productPrice: dto.productId
-            ? (await tx.product.findUnique({ where: { id: dto.productId } }))
-                ?.price
-            : undefined,
+          productPrice,
           balanceAfter,
         },
         include: {
@@ -246,13 +306,39 @@ export class CashService {
           product: { select: { id: true, name: true, price: true } },
         },
       });
+
+      return {
+        transaction,
+        invoice: invoice ? this.formatInvoiceResponse(invoice) : undefined,
+        balanceAfter,
+      };
     });
 
+    if (result.balanceAfter < 0) {
+      this.logger.warn(
+        `⚠️  Caja en negativo después de transacción: $${result.balanceAfter.toLocaleString('es-CO')} COP`,
+      );
+      this.alertsGateway.emitNotification('cash_negative', {
+        balance: result.balanceAfter,
+        transaction: dto.description,
+      });
+    }
+
     this.logger.log(
-      `💳 ${dto.type} — $${amount.toLocaleString('es-CO')} COP — "${dto.description}" — usuario #${userId} — saldo: $${balanceAfter.toLocaleString('es-CO')}`,
+      `💳 ${dto.type} — $${Number(result.transaction.amount).toLocaleString('es-CO')} COP — "${dto.description}" — usuario #${userId} — saldo: $${result.balanceAfter.toLocaleString('es-CO')}`,
     );
 
-    return { ...transaction, balanceAfter };
+    if (!result.invoice) {
+      return { ...result.transaction, balanceAfter: result.balanceAfter };
+    }
+
+    return {
+      transaction: {
+        ...result.transaction,
+        balanceAfter: result.balanceAfter,
+      },
+      invoice: result.invoice,
+    };
   }
 
   // ─── Listar transacciones ─────────────────────────────────────────────────
@@ -388,5 +474,111 @@ export class CashService {
     return lastTransaction
       ? Number(lastTransaction.balanceAfter)
       : Number(register.openingBalance);
+  }
+
+  private async generateInvoiceNumber(tx: Prisma.TransactionClient) {
+    const lastInvoice = await tx.invoice.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { number: true },
+    });
+
+    if (!lastInvoice?.number) return 'FAC-0001';
+
+    const numericPart = lastInvoice.number.replace('FAC-', '');
+    const current = Number.parseInt(numericPart, 10);
+    const next = Number.isNaN(current) ? 1 : current + 1;
+    return `FAC-${String(next).padStart(4, '0')}`;
+  }
+
+  private formatInvoiceResponse(
+    invoice: Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>,
+  ) {
+    return {
+      id: invoice.id,
+      number: invoice.number,
+      cashRegisterId: invoice.cashRegisterId,
+      userId: invoice.userId,
+      userName: invoice.user?.name ?? undefined,
+      subtotal: Number(invoice.subtotal),
+      total: Number(invoice.total),
+      status: invoice.status,
+      createdAt: invoice.createdAt,
+      updatedAt: invoice.updatedAt,
+      items: invoice.items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        productName: item.product?.name ?? item.description,
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice),
+        subtotal: Number(item.total),
+        total: Number(item.total),
+      })),
+    };
+  }
+
+  private async generateAndUploadExcelReport(
+    cashRegisterId: number,
+  ): Promise<ReportUploadResult> {
+    console.log('[CashClose] Generating Excel report...');
+    const fileName = `reporte-diario-dulce-colonial-${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+
+    try {
+      const buffer =
+        await this.excelReportService.generateDailyReport(cashRegisterId);
+
+      if (!buffer?.length) {
+        console.log('[CashClose] Excel generated, size: 0');
+        return {
+          success: false,
+          fileName,
+          error: 'El reporte Excel se generó vacío.',
+        };
+      }
+
+      console.log('[CashClose] Excel generated, size:', buffer.length);
+
+      const upload = await this.driveService.uploadBufferToFolder(
+        fileName,
+        buffer,
+        'reportes-diarios',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+
+      console.log('[CashClose] Drive upload success:', fileName);
+      return {
+        success: true,
+        destination: 'Dulce Colonial/reportes-diarios',
+        fileName,
+        driveId: upload.id,
+        driveUrl: upload.webViewLink,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Excel/Drive failed after cash close: ${message}`);
+      return {
+        success: false,
+        destination: 'Dulce Colonial/reportes-diarios',
+        fileName,
+        error: this.toPublicReportError(message),
+      };
+    }
+  }
+
+  private toPublicReportError(message: string) {
+    if (
+      message.includes('no está configurado') ||
+      message.includes('autorizado') ||
+      message.includes('invalid_grant') ||
+      message.includes('revoked')
+    ) {
+      return 'Google Drive no está autorizado. Revisa la conexión de Drive.';
+    }
+
+    if (message.includes('Carpeta')) {
+      return 'No se pudo encontrar o crear la carpeta de reportes en Google Drive.';
+    }
+
+    return 'El reporte no pudo subirse a Google Drive. Revisa la configuración de Drive.';
   }
 }

@@ -7,6 +7,34 @@ const navItems = [
   { to: '/products',   icon: '🍰', label: 'Productos'     },
   { to: '/inventory',  icon: '📦', label: 'Inventario'    },
   { to: '/movements',  icon: '↕️',  label: 'Movimientos'   },
+  {
+    to: '/invoices',
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M7 3h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V5a2 2 0 0 1 2-2Z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 7h6M9 11h6M9 15h4"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+    label: 'Facturas',
+  },
   { to: '/reports',    icon: '📊', label: 'Reportes'      },
   { to: '/cash', icon: '🏧', label: 'Caja' },
 ];

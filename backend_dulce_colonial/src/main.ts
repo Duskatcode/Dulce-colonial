@@ -12,8 +12,21 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1', {
     exclude: ['api/docs', 'api/docs-json', 'google/callback'],
   });
+  const corsOrigins = (
+    process.env.CORS_ORIGIN ||
+    'http://localhost:5173,http://localhost:4173,file://,null'
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      if (!origin || corsOrigins.includes(origin) || origin === 'null') {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origen no permitido por CORS: ${origin}`));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

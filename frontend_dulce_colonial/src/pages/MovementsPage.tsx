@@ -12,7 +12,7 @@ import { Movement, MovementType, ReferenceType } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { getApiErrorMessage } from '../utils/errorMessage';
 
-const emptyForm = { type: 'ENTRADA', entityType: 'PRODUCTO', entityId: 0, quantity: 1, notes: '' };
+const emptyForm = { type: 'ENTRADA', entityType: 'PRODUCTO', entityId: 0, quantity: '1', notes: '' };
 
 export default function MovementsPage() {
   const { isOperador } = useAuth();
@@ -42,7 +42,17 @@ export default function MovementsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: movementsService.create,
+    mutationFn: (data: any) =>
+      {
+        const quantity = Number(data.quantity || 0);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error('La cantidad debe ser un número válido mayor a 0.');
+        }
+        return movementsService.create({
+          ...data,
+          quantity,
+        });
+      },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['movements'] });
       qc.invalidateQueries({ queryKey: ['products'] });
@@ -133,7 +143,7 @@ export default function MovementsPage() {
               ))}
             </select>
           </div>
-          <Field label="Cantidad" type="number" value={form.quantity} onChange={(v: string) => setForm({ ...form, quantity: +v })} />
+          <Field label="Cantidad" type="number" value={form.quantity} onChange={(v: string) => setForm({ ...form, quantity: v })} numeric />
           <Field label="Motivo" value={form.notes} onChange={(v: string) => setForm({ ...form, notes: v })} />
           <button onClick={() => createMutation.mutate(form)} disabled={createMutation.isPending || !form.entityId}
             style={{ padding: '11px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15, opacity: !form.entityId ? 0.5 : 1 }}>
@@ -145,10 +155,19 @@ export default function MovementsPage() {
   );
 }
 
-const Field = ({ label, value, onChange, type = 'text' }: any) => (
+const Field = ({ label, value, onChange, type = 'text', numeric = false }: any) => (
   <div>
     <label style={labelStyle}>{label}</label>
-    <input type={type} value={value} onChange={e => onChange(e.target.value)} style={inputStyle} />
+    <input
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onFocus={numeric ? e => e.currentTarget.select() : undefined}
+      inputMode={numeric ? 'decimal' : undefined}
+      min={numeric ? 0 : undefined}
+      placeholder={numeric ? '0' : undefined}
+      style={inputStyle}
+    />
   </div>
 );
 

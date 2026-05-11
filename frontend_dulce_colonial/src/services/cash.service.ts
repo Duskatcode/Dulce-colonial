@@ -28,6 +28,7 @@ export const cashService = {
     reference?:  string;
     productId?:  number;
     productQty?: number;
+    generateInvoice?: boolean;
   }) => {
     try {
       const response = await api.post('/cash/transaction', data);

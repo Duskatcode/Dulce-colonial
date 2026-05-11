@@ -20,6 +20,7 @@ model User {
   openedRegisters  CashRegister[]    @relation("OpenedBy")
   closedRegisters  CashRegister[]    @relation("ClosedBy")
   cashTransactions CashTransaction[]
+  invoices      Invoice[]
 
   movements    Movement[]
   activityLogs ActivityLog[]
@@ -39,6 +40,7 @@ model Product {
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   cashTransactions CashTransaction[]
+  invoiceItems  InvoiceItem[]
 
   movements   Movement[]
 
@@ -156,6 +158,7 @@ model CashRegister {
   closedBy       User?         @relation("ClosedBy", fields: [closedById], references: [id])
 
   transactions   CashTransaction[]
+  invoices       Invoice[]
 
   @@map("cash_registers")
 }
@@ -182,4 +185,36 @@ model CashTransaction {
   createdAt      DateTime      @default(now()) @map("created_at")
 
   @@map("cash_transactions")
+}
+
+model Invoice {
+  id             Int           @id @default(autoincrement())
+  number         String        @unique // correlativo: FAC-0001
+  cashRegisterId Int           @map("cash_register_id")
+  cashRegister   CashRegister  @relation(fields: [cashRegisterId], references: [id])
+  userId         Int           @map("user_id")
+  user           User          @relation(fields: [userId], references: [id])
+  items          InvoiceItem[]
+  subtotal       Decimal       @db.Decimal(10, 2)
+  total          Decimal       @db.Decimal(10, 2)
+  status         String        @default("EMITIDA") // EMITIDA | ANULADA
+  pdfPath        String?       @map("pdf_path") // temp path, nullable
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          Int      @id @default(autoincrement())
+  invoiceId   Int      @map("invoice_id")
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  productId   Int      @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id])
+  description String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2) @map("unit_price")
+  total       Decimal  @db.Decimal(10, 2)
+
+  @@map("invoice_items")
 }

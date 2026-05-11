@@ -14,6 +14,7 @@ import { AlertsModule } from './modules/alerts/alerts.module';
 import { DriveModule } from './modules/drive/drive.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { CashModule } from './modules/cash/cash.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CashModule } from './modules/cash/cash.module';
     MovementsModule,
     ReportsModule,
     AlertsModule,
+    InvoicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

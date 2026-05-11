@@ -6,6 +6,8 @@ import Modal from '../components/ui/Modal';
 import StatCard from '../components/ui/StatCard';
 import { cashService } from '../services/cash.service';
 import { productsService } from '../services/products.service';
+import InvoiceModal from '../components/invoices/InvoiceModal';
+import type { Invoice } from '../types/invoice.types';
 import { CashTransaction, TransactionType } from '../types';
 import { getApiErrorMessage } from '../utils/errorMessage';
 
@@ -13,10 +15,11 @@ interface CashStatusResponse {
   status: 'ABIERTA' | 'CERRADA';
   balance: number;
   register?: {
+    id: number;
     openedBy?: {
       name: string;
     };
-  };
+  } | null;
 }
 
 interface CashSummaryUser {
@@ -53,22 +56,23 @@ interface ProductsCashResponse {
 }
 
 interface OpenCashForm {
-  openingBalance: number;
+  openingBalance: string;
   notes: string;
 }
 
 interface CloseCashForm {
-  closingBalance: number;
+  closingBalance: string;
   notes: string;
 }
 
 interface TxFormState {
   type: TransactionType;
-  amount: number;
+  amount: string;
   description: string;
   reference: string;
   productId: number;
-  productQty: number;
+  productQty: string;
+  generateInvoice: boolean;
 }
 
 interface TxFilterState {
@@ -83,10 +87,22 @@ interface CreateTransactionPayload {
   reference?: string;
   productId?: number;
   productQty?: number;
+  generateInvoice?: boolean;
 }
 
 interface CloseRegisterResponse {
   differenceLabel?: string;
+  reportUpload?: {
+    success: boolean;
+    destination?: string;
+    fileName?: string;
+    error?: string;
+  };
+}
+
+interface CreateTransactionResponse {
+  transaction?: CashTransaction;
+  invoice?: Invoice;
 }
 
 const TYPE_LABELS: Record<TransactionType, string> = {
@@ -109,21 +125,23 @@ const DEBIT_TYPES: TransactionType[] = ['GASTO', 'DEVOLUCION', 'COTIZACION'];
 
 const emptyTx: TxFormState = {
   type: 'VENTA',
-  amount: 0,
+  amount: '',
   description: '',
   reference: '',
   productId: 0,
-  productQty: 1,
+  productQty: '1',
+  generateInvoice: false,
 };
 
 function getProductTotal(
   products: ProductsCashResponse | undefined,
   productId: number,
-  productQty: number,
+  productQty: string,
 ): number | null {
   const product = products?.data?.find((item) => item.id === productId);
   if (!product) return null;
-  return Number(product.price) * (productQty || 1);
+  const quantity = Number(productQty || 1);
+  return Number(product.price) * (Number.isFinite(quantity) ? quantity : 1);
 }
 
 export default function CashPage() {
@@ -132,14 +150,15 @@ export default function CashPage() {
   const [openModal, setOpenModal] = useState(false);
   const [closeModal, setCloseModal] = useState(false);
   const [txModal, setTxModal] = useState(false);
+  const [invoiceToShow, setInvoiceToShow] = useState<Invoice | null>(null);
 
   const [openForm, setOpenForm] = useState<OpenCashForm>({
-    openingBalance: 0,
+    openingBalance: '',
     notes: '',
   });
 
   const [closeForm, setCloseForm] = useState<CloseCashForm>({
-    closingBalance: 0,
+    closingBalance: '',
     notes: '',
   });
 
@@ -178,13 +197,23 @@ export default function CashPage() {
   });
 
   const openMutation = useMutation({
-    mutationFn: cashService.openRegister,
+    mutationFn: (data: OpenCashForm) =>
+      {
+        const openingBalance = Number(data.openingBalance || 0);
+        if (!Number.isFinite(openingBalance) || openingBalance < 0) {
+          throw new Error('El saldo inicial debe ser un número válido mayor o igual a 0.');
+        }
+        return cashService.openRegister({
+          openingBalance,
+          notes: data.notes,
+        });
+      },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cash-status'] });
       qc.invalidateQueries({ queryKey: ['cash-summary'] });
       toast.success('Caja abierta correctamente');
       setOpenModal(false);
-      setOpenForm({ openingBalance: 0, notes: '' });
+      setOpenForm({ openingBalance: '', notes: '' });
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Error al abrir caja'));
@@ -192,34 +221,55 @@ export default function CashPage() {
   });
 
   const closeMutation = useMutation<CloseRegisterResponse, any, CloseCashForm>({
-    mutationFn: cashService.closeRegister,
+    mutationFn: (data: CloseCashForm) =>
+      {
+        const closingBalance = Number(data.closingBalance || 0);
+        if (!Number.isFinite(closingBalance) || closingBalance < 0) {
+          throw new Error('El dinero físico contado debe ser un número válido mayor o igual a 0.');
+        }
+        return cashService.closeRegister({
+          closingBalance,
+          notes: data.notes,
+        });
+      },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['cash-status'] });
       qc.invalidateQueries({ queryKey: ['cash-summary'] });
       toast.success(data?.differenceLabel || 'Caja cerrada');
+      if (data?.reportUpload && !data.reportUpload.success) {
+        toast.error(
+          data.reportUpload.error ||
+            'Caja cerrada correctamente, pero el reporte no pudo subirse a Google Drive. Revisa la autorización de Drive.',
+          { duration: 7000 },
+        );
+      }
       setCloseModal(false);
-      setCloseForm({ closingBalance: 0, notes: '' });
+      setCloseForm({ closingBalance: '', notes: '' });
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Error al cerrar caja'));
     },
   });
 
-  const txMutation = useMutation({
+  const txMutation = useMutation<CreateTransactionResponse | CashTransaction, unknown, CreateTransactionPayload>({
     mutationFn: (payload: CreateTransactionPayload) =>
       cashService.createTransaction(payload),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['cash-status'] });
       qc.invalidateQueries({ queryKey: ['cash-summary'] });
       qc.invalidateQueries({ queryKey: ['cash-transactions'] });
       qc.invalidateQueries({ queryKey: ['products'] });
       qc.invalidateQueries({ queryKey: ['products-cash'] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Movimiento registrado');
       setTxModal(false);
       setTxForm(emptyTx);
+      const invoice =
+        'invoice' in result && result.invoice ? result.invoice : undefined;
+      if (invoice) setInvoiceToShow(invoice);
     },
     onError: (error) => {
-      console.error(error);
+      toast.error(getApiErrorMessage(error, 'Error al registrar movimiento'));
     },
   });
 
@@ -231,9 +281,21 @@ export default function CashPage() {
 
   const handleSubmitTransaction = () => {
     const isProductSale = txForm.type === 'VENTA' && txForm.productId > 0;
+    const manualAmount = Number(txForm.amount || 0);
+    const productQty = Number(txForm.productQty || 1);
     const productTotal = isProductSale
       ? getProductTotal(products, txForm.productId, txForm.productQty)
       : null;
+
+    if (!isProductSale && (!Number.isFinite(manualAmount) || manualAmount < 0)) {
+      toast.error('El monto debe ser un número válido mayor o igual a 0.');
+      return;
+    }
+
+    if (isProductSale && (!Number.isFinite(productQty) || productQty <= 0)) {
+      toast.error('La cantidad debe ser un número válido mayor a 0.');
+      return;
+    }
 
     if (isProductSale && (productTotal === null || productTotal <= 0)) {
       toast.error('No se pudo calcular el total de la venta');
@@ -242,13 +304,12 @@ export default function CashPage() {
 
     txMutation.mutate({
       type: txForm.type,
-      amount: Number(
-        isProductSale ? productTotal : txForm.amount,
-      ),
+      amount: Number(isProductSale ? productTotal : manualAmount),
       description: txForm.description,
       reference: txForm.reference || undefined,
       productId: isProductSale ? Number(txForm.productId) : undefined,
-      productQty: isProductSale ? Number(txForm.productQty) : undefined,
+      productQty: isProductSale ? productQty : undefined,
+      generateInvoice: isProductSale ? txForm.generateInvoice : false,
     });
   };
 
@@ -598,9 +659,11 @@ export default function CashPage() {
               onChange={(e) =>
                 setOpenForm({
                   ...openForm,
-                  openingBalance: Number(e.target.value),
+                  openingBalance: e.target.value,
                 })
               }
+              onFocus={(e) => e.currentTarget.select()}
+              inputMode="decimal"
               style={inputStyle}
               placeholder="Ej: 100000"
             />
@@ -661,9 +724,11 @@ export default function CashPage() {
               onChange={(e) =>
                 setCloseForm({
                   ...closeForm,
-                  closingBalance: Number(e.target.value),
+                  closingBalance: e.target.value,
                 })
               }
+              onFocus={(e) => e.currentTarget.select()}
+              inputMode="decimal"
               style={inputStyle}
               placeholder="Ej: 125000"
             />
@@ -715,7 +780,8 @@ export default function CashPage() {
                         ...txForm,
                         type: typedKey,
                         productId: 0,
-                        productQty: 1,
+                        productQty: '1',
+                        generateInvoice: false,
                       })
                     }
                     style={{
@@ -776,9 +842,10 @@ export default function CashPage() {
                     onChange={(e) =>
                       setTxForm({
                         ...txForm,
-                        productQty: Number(e.target.value),
+                        productQty: e.target.value,
                       })
                     }
+                    onFocus={(e) => e.currentTarget.select()}
                     style={inputStyle}
                   />
 
@@ -802,6 +869,31 @@ export default function CashPage() {
                   })()}
                 </div>
               )}
+
+              {txForm.productId > 0 && (
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 14,
+                    color: '#3d1a00',
+                    fontWeight: 600,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={txForm.generateInvoice}
+                    onChange={(e) =>
+                      setTxForm({
+                        ...txForm,
+                        generateInvoice: e.target.checked,
+                      })
+                    }
+                  />
+                  Generar factura con esta venta
+                </label>
+              )}
             </>
           )}
 
@@ -809,17 +901,19 @@ export default function CashPage() {
             <div>
               <label style={labelStyle}>Monto (COP)</label>
               <input
-                type="number"
-                value={txForm.amount}
-                onChange={(e) =>
-                  setTxForm({
-                    ...txForm,
-                    amount: Number(e.target.value),
-                  })
-                }
-                style={inputStyle}
-                placeholder="Ej: 25000"
-              />
+              type="number"
+              value={txForm.amount}
+              onChange={(e) =>
+                setTxForm({
+                  ...txForm,
+                  amount: e.target.value,
+                })
+              }
+              onFocus={(e) => e.currentTarget.select()}
+              inputMode="decimal"
+              style={inputStyle}
+              placeholder="Ej: 25000"
+            />
             </div>
           )}
 
@@ -875,6 +969,10 @@ export default function CashPage() {
           </button>
         </div>
       </Modal>
+
+      {invoiceToShow && (
+        <InvoiceModal invoice={invoiceToShow} onClose={() => setInvoiceToShow(null)} />
+      )}
     </AppLayout>
   );
 }
