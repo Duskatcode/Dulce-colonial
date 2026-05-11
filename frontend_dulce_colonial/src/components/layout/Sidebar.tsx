@@ -3,131 +3,87 @@ import { useAuth } from '../../context/AuthContext';
 import AlertsPanel from '../ui/AlertsPanel';
 
 const navItems = [
-  { to: '/dashboard',  icon: '🏠', label: 'Inicio'       },
-  { to: '/products',   icon: '🍰', label: 'Productos'     },
-  { to: '/inventory',  icon: '📦', label: 'Inventario'    },
-  { to: '/movements',  icon: '↕️',  label: 'Movimientos'   },
-  {
-    to: '/invoices',
-    icon: (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M7 3h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V5a2 2 0 0 1 2-2Z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M9 7h6M9 11h6M9 15h4"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-    label: 'Facturas',
-  },
-  { to: '/reports',    icon: '📊', label: 'Reportes'      },
-  { to: '/cash', icon: '🏧', label: 'Caja' },
-];
-
-const adminItems = [
-  { to: '/users', icon: '👥', label: 'Usuarios' },
+  { to: '/dashboard', icon: 'dashboard', label: 'Inicio' },
+  { to: '/products', icon: 'bakery_dining', label: 'Productos' },
+  { to: '/inventory', icon: 'inventory_2', label: 'Inventario' },
+  { to: '/movements', icon: 'swap_vert', label: 'Movimientos' },
+  { to: '/invoices', icon: 'receipt_long', label: 'Facturas' },
+  { to: '/reports', icon: 'analytics', label: 'Reportes' },
+  { to: '/cash', icon: 'point_of_sale', label: 'Caja' },
 ];
 
 const configItems = [
-  {
-    to: '/drive/settings',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-      </svg>
-    ),
-    label: 'Google Drive',
-  },
+  { to: '/drive/settings', icon: 'cloud', label: 'Google Drive' },
 ];
+
+const adminItems = [
+  { to: '/users', icon: 'group', label: 'Usuarios' },
+];
+
+function SidebarLink({
+  to,
+  icon,
+  label,
+}: {
+  to: string;
+  icon: string;
+  label: string;
+}) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) => `dc-sidebar-link ${isActive ? 'active' : ''}`}
+    >
+      <span className="material-symbols-outlined">{icon}</span>
+      <span>{label}</span>
+    </NavLink>
+  );
+}
 
 export default function Sidebar() {
   const { isAdmin, logout, user } = useAuth();
 
-  const linkStyle = (active: boolean): React.CSSProperties => ({
-    display: 'flex', alignItems: 'center', gap: 10,
-    padding: '10px 16px', borderRadius: 8,
-    textDecoration: 'none', fontSize: 14, fontWeight: 500,
-    color: active ? '#fff' : '#c8a99a',
-    background: active ? 'rgba(255,255,255,0.15)' : 'transparent',
-    transition: 'all 0.15s',
-  });
-
   return (
-    <aside style={{
-      width: 220, background: 'linear-gradient(180deg, #1a0a00 0%, #2d1200 100%)',
-      minHeight: '100vh', display: 'flex', flexDirection: 'column',
-      padding: '0 12px', position: 'fixed', left: 0, top: 0, bottom: 0,
-      zIndex: 100,
-    }}>
-      {/* Logo */}
-      <div style={{ padding: '24px 8px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>🍰 Dulce Colonial</div>
-        <div style={{ fontSize: 11, color: '#c8a99a', marginTop: 4 }}>Administración</div>
+    <aside className="dc-sidebar">
+      <div className="dc-sidebar-brand">
+        <div className="dc-sidebar-logo">
+          <span className="material-symbols-outlined" style={{ fontSize: 30 }}>
+            bakery_dining
+          </span>
+        </div>
+        <h1 className="dc-sidebar-title">Dulce Colonial</h1>
+        <p className="dc-sidebar-subtitle">Administración</p>
       </div>
 
-      {/* Nav principal */}
-      <nav style={{ marginTop: 16, flex: 1 }}>
-        <div style={{ fontSize: 10, color: '#8a6a5a', padding: '4px 8px 8px', letterSpacing: 1 }}>
-          MENÚ
-        </div>
-        {navItems.map(item => (
-          <NavLink key={item.to} to={item.to} style={({ isActive }) => linkStyle(isActive)}>
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
-          </NavLink>
+      <nav className="dc-sidebar-nav">
+        <div className="dc-sidebar-section">Menú</div>
+        {navItems.map((item) => (
+          <SidebarLink key={item.to} {...item} />
         ))}
 
-        <div style={{ fontSize: 10, color: '#8a6a5a', padding: '16px 8px 8px', letterSpacing: 1 }}>
-          CONFIGURACIÓN
-        </div>
-        {configItems.map(item => (
-          <NavLink key={item.to} to={item.to} style={({ isActive }) => linkStyle(isActive)}>
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
-          </NavLink>
+        <div className="dc-sidebar-section">Configuración</div>
+        {configItems.map((item) => (
+          <SidebarLink key={item.to} {...item} />
         ))}
 
         {isAdmin && (
           <>
-            <div style={{ fontSize: 10, color: '#8a6a5a', padding: '16px 8px 8px', letterSpacing: 1 }}>
-              ADMIN
-            </div>
-            {adminItems.map(item => (
-              <NavLink key={item.to} to={item.to} style={({ isActive }) => linkStyle(isActive)}>
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </NavLink>
+            <div className="dc-sidebar-section">Admin</div>
+            {adminItems.map((item) => (
+              <SidebarLink key={item.to} {...item} />
             ))}
           </>
         )}
+
+        <div style={{ padding: '12px 0 0' }}>
+          <AlertsPanel />
+        </div>
       </nav>
-      <div style={{ padding: '0 0 8px' }}>
-        <AlertsPanel />
-      </div>
-      {/* Usuario */}
-      <div style={{ padding: '16px 8px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-        <div style={{ fontSize: 13, color: '#fff', fontWeight: 600 }}>{user?.name}</div>
-        <div style={{ fontSize: 11, color: '#c8a99a', marginBottom: 10 }}>{user?.role}</div>
-        <button onClick={logout} style={{
-          width: '100%', padding: '8px', borderRadius: 6,
-          background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
-          color: '#fff', cursor: 'pointer', fontSize: 13,
-        }}>
+
+      <div className="dc-sidebar-footer">
+        <p className="dc-user-name">{user?.name ?? 'Administrador'}</p>
+        <p className="dc-user-role">{user?.role ?? 'ADMIN'}</p>
+        <button className="dc-logout-button" onClick={logout} type="button">
           Cerrar sesión
         </button>
       </div>

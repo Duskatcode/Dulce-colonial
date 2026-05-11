@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 
@@ -9,13 +9,12 @@ interface AppLayoutProps {
 
 export default function AppLayout({ title, children }: AppLayoutProps) {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f7f2ed' }}>
+    <div className="dc-app-shell">
       <Sidebar />
-      <div style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column' }}>
+
+      <div className="dc-app-main">
         <Topbar title={title} />
-        <main style={{ flex: 1, padding: 28 }}>
-          {children}
-        </main>
+        <main className="dc-page-canvas">{children}</main>
       </div>
     </div>
   );
