@@ -20,7 +20,7 @@ export const inventoryService = {
     api.get<string[]>('/inventory/units').then(r => r.data),
 
   getLowStock: () =>
-    api.get<Ingredient[]>('/inventory/low-stock').then(r => r.data),
+    api.get<Ingredient[]>('/inventory/below-min').then(r => r.data),
 
   create: (data: Partial<Ingredient>) =>
     api.post<Ingredient>('/inventory', data).then(r => r.data),

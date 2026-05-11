@@ -7,8 +7,9 @@ import Modal from '../components/ui/Modal';
 import { inventoryService } from '../services/inventory.service';
 import { Ingredient } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
-const emptyForm = { name: '', unit: 'kg', quantity: 0, minStock: 0, observations: '' };
+const emptyForm = { name: '', unit: 'kg', quantity: '', minStock: '', observations: '' };
 
 export default function InventoryPage() {
   const { isOperador, isAdmin } = useAuth();
@@ -26,8 +27,22 @@ export default function InventoryPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (d: any) =>
-      editing ? inventoryService.update(editing.id, d) : inventoryService.create(d),
+    mutationFn: (d: any) => {
+      const quantity = Number(d.quantity || 0);
+      const minStock = Number(d.minStock || 0);
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        throw new Error('La cantidad debe ser un número válido mayor o igual a 0.');
+      }
+      if (!Number.isFinite(minStock) || minStock < 0) {
+        throw new Error('El stock mínimo debe ser un número válido mayor o igual a 0.');
+      }
+      const payload = {
+        ...d,
+        quantity,
+        minStock,
+      };
+      return editing ? inventoryService.update(editing.id, payload) : inventoryService.create(payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory'] });
       toast.success(editing ? 'Insumo actualizado' : 'Insumo registrado');
@@ -35,7 +50,7 @@ export default function InventoryPage() {
       setEditing(null);
       setForm(emptyForm);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al guardar'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al guardar')),
   });
 
   const deleteMutation = useMutation({
@@ -43,7 +58,15 @@ export default function InventoryPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['inventory'] }); toast.success('Insumo eliminado'); },
   });
 
-  const openEdit = (i: Ingredient) => { setEditing(i); setForm({ ...i }); setModalOpen(true); };
+  const openEdit = (i: Ingredient) => {
+    setEditing(i);
+    setForm({
+      ...i,
+      quantity: String(i.quantity ?? ''),
+      minStock: String(i.minStock ?? ''),
+    });
+    setModalOpen(true);
+  };
 
   const columns = [
     { key: 'name', label: 'Insumo' },
@@ -98,8 +121,8 @@ export default function InventoryPage() {
               ))}
             </select>
           </div>
-          <Field label="Cantidad disponible" type="number" value={form.quantity} onChange={(v: string) => setForm({ ...form, quantity: +v })} />
-          <Field label="Stock mínimo" type="number" value={form.minStock} onChange={(v: string) => setForm({ ...form, minStock: +v })} />
+          <Field label="Cantidad disponible" type="number" value={form.quantity} onChange={(v: string) => setForm({ ...form, quantity: v })} numeric />
+          <Field label="Stock mínimo" type="number" value={form.minStock} onChange={(v: string) => setForm({ ...form, minStock: v })} numeric />
           <Field label="Observaciones" value={form.observations} onChange={(v: string) => setForm({ ...form, observations: v })} />
           <button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}
             style={{ padding: '11px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 15 }}>
@@ -111,10 +134,19 @@ export default function InventoryPage() {
   );
 }
 
-const Field = ({ label, value, onChange, type = 'text' }: any) => (
+const Field = ({ label, value, onChange, type = 'text', numeric = false }: any) => (
   <div>
     <label style={labelStyle}>{label}</label>
-    <input type={type} value={value} onChange={e => onChange(e.target.value)} style={inputStyle} />
+    <input
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onFocus={numeric ? e => e.currentTarget.select() : undefined}
+      inputMode={numeric ? 'decimal' : undefined}
+      min={numeric ? 0 : undefined}
+      placeholder={numeric ? '0' : undefined}
+      style={inputStyle}
+    />
   </div>
 );
 

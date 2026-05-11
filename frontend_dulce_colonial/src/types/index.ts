@@ -66,3 +66,36 @@ export interface StockAlert {
   minStock: number;
   timestamp: string;
 }
+
+export type TransactionType =
+  | 'VENTA'
+  | 'GASTO'
+  | 'INGRESO'
+  | 'DEVOLUCION'
+  | 'COTIZACION';
+
+export interface CashRegister {
+  id:             number;
+  status:         'ABIERTA' | 'CERRADA';
+  openedAt:       string;
+  closedAt?:      string;
+  openingBalance: number;
+  closingBalance?: number;
+  expectedBalance?: number;
+  openedBy?:      { id: number; name: string };
+  closedBy?:      { id: number; name: string };
+}
+
+export interface CashTransaction {
+  id:             number;
+  cashRegisterId: number;
+  type:           TransactionType;
+  amount:         number;
+  description:    string;
+  reference?:     string;
+  balanceAfter:   number;
+  createdAt:      string;
+  user:           { id: number; name: string };
+  product?:       { id: number; name: string; price: number };
+  productQty?:    number;
+}

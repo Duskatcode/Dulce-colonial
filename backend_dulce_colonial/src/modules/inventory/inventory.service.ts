@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { AlertsGateway } from '../alerts/alerts.gateway';
 import { FilterInventoryDto } from './dto/filter-inventory.dto';
@@ -14,36 +19,62 @@ export class InventoryService {
   ) {}
 
   async findAll(filters: FilterInventoryDto) {
-    const ingredients = await this.prisma.ingredient.findMany({
-      where: {
-        ...(filters.search && {
-          name: { contains: filters.search, mode: 'insensitive' },
-        }),
-        ...(filters.unit && { unit: { equals: filters.unit, mode: 'insensitive' } }),
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+    const page = Number(filters.page ?? 1);
+    const limit = Number(filters.limit ?? 20);
+    const skip = (page - 1) * limit;
+    const where: Prisma.IngredientWhereInput = {};
 
-    if (filters.belowMinStock) {
-      return ingredients.filter((item) => item.quantity <= item.minStock);
+    if (filters.search) {
+      where.name = { contains: filters.search, mode: 'insensitive' };
+    }
+    if (filters.unit) {
+      where.unit = { equals: filters.unit, mode: 'insensitive' };
     }
 
-    return ingredients;
+    const orderBy = { updatedAt: 'desc' as const };
+
+    if (filters.belowMinStock) {
+      const rows = await this.prisma.ingredient.findMany({ where, orderBy });
+      const filtered = rows.filter((item) => item.quantity <= item.minStock);
+      const total = filtered.length;
+      const data = filtered
+        .slice(skip, skip + limit)
+        .map((ingredient) => this.formatIngredientResponse(ingredient));
+      return this.buildPaginatedResponse(data, total, page, limit);
+    }
+
+    const [rows, total] = await Promise.all([
+      this.prisma.ingredient.findMany({ where, orderBy, skip, take: limit }),
+      this.prisma.ingredient.count({ where }),
+    ]);
+
+    const data = rows.map((ingredient) =>
+      this.formatIngredientResponse(ingredient),
+    );
+    return this.buildPaginatedResponse(data, total, page, limit);
   }
 
   async findOne(id: number) {
-    const ingredient = await this.prisma.ingredient.findUnique({ where: { id } });
-    if (!ingredient) throw new NotFoundException(`Ingrediente #${id} no encontrado`);
+    const ingredient = await this.prisma.ingredient.findUnique({
+      where: { id },
+    });
+    if (!ingredient)
+      throw new NotFoundException(`Ingrediente #${id} no encontrado`);
     return ingredient;
   }
 
   create(dto: CreateIngredientDto) {
-    return this.prisma.ingredient.create({ data: dto });
+    const data = this.mapObservations(dto);
+    return this.prisma.ingredient.create({ data });
   }
 
   async update(id: number, dto: UpdateIngredientDto) {
     await this.findOne(id);
-    const ingredient = await this.prisma.ingredient.update({ where: { id }, data: dto });
+    const data = this.mapObservations(dto);
+    const ingredient = await this.prisma.ingredient.update({
+      where: { id },
+      data,
+    });
     this.emitLowStockIfNeeded(ingredient);
     return ingredient;
   }
@@ -64,15 +95,19 @@ export class InventoryService {
   }
 
   async getRawBelowMinimum() {
-    return this.prisma.$queryRaw<
-      { id: number; name: string; quantity: number; minStock: number }[]
-    >`SELECT id, name, quantity, min_stock AS "minStock" FROM "Ingredient" WHERE quantity < min_stock ORDER BY quantity ASC`;
+    const rows = await this.prisma.ingredient.findMany({
+      orderBy: { quantity: 'asc' },
+    });
+    return rows
+      .filter((ingredient) => ingredient.quantity < ingredient.minStock)
+      .map((ingredient) => this.formatIngredientResponse(ingredient));
   }
 
   async adjustQuantity(id: number, dto: AdjustQuantityDto) {
     return this.prisma.$transaction(async (tx) => {
       const ingredient = await tx.ingredient.findUnique({ where: { id } });
-      if (!ingredient) throw new NotFoundException(`Ingrediente #${id} no encontrado`);
+      if (!ingredient)
+        throw new NotFoundException(`Ingrediente #${id} no encontrado`);
 
       const newQuantity = ingredient.quantity + dto.amount;
       if (newQuantity < 0) {
@@ -89,7 +124,12 @@ export class InventoryService {
     });
   }
 
-  private emitLowStockIfNeeded(ingredient: { id: number; name: string; quantity: number; minStock: number }) {
+  private emitLowStockIfNeeded(ingredient: {
+    id: number;
+    name: string;
+    quantity: number;
+    minStock: number;
+  }) {
     if (ingredient.minStock > 0 && ingredient.quantity <= ingredient.minStock) {
       this.alertsGateway.emitStockAlert({
         entityType: 'ingrediente',
@@ -98,5 +138,42 @@ export class InventoryService {
         minStock: ingredient.minStock,
       });
     }
+  }
+
+  private mapObservations<T extends { notes?: string; observations?: string }>(
+    dto: T,
+  ) {
+    const { observations, ...rest } = dto;
+    if (observations !== undefined && rest.notes === undefined) {
+      return { ...rest, notes: observations };
+    }
+    return rest;
+  }
+
+  private formatIngredientResponse(
+    ingredient: Prisma.IngredientGetPayload<object>,
+  ) {
+    return {
+      ...ingredient,
+      observations: ingredient.notes ?? undefined,
+    };
+  }
+
+  private buildPaginatedResponse<T>(
+    data: T[],
+    total: number,
+    page: number,
+    limit: number,
+  ) {
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
   }
 }

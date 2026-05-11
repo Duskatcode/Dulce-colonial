@@ -8,6 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+*.tsbuildinfo
+tsconfig.build*.tsbuildinfo
 dist
 dist-ssr
 *.local
@@ -22,3 +24,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+backend_dulce_colonial/config/google-credentials.json
+backend_dulce_colonial/config/google-token.json
+backend_dulce_colonial/.env
+backend_dulce_colonial/.env.*

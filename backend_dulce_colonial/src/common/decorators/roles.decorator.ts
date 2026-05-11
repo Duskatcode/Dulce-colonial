@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import { Role } from '../enums/role.enum';
 
 export const ROLES_KEY = 'roles';
-export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
+// Acepta strings directamente sin depender del enum de Prisma
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);

@@ -28,10 +28,7 @@ export class MovementsController {
 
   @Post()
   @Roles(Role.ADMIN, Role.OPERADOR)
-  create(
-    @Body() dto: CreateMovementDto,
-    @CurrentUser('id') userId?: number,
-  ) {
+  create(@Body() dto: CreateMovementDto, @CurrentUser('id') userId?: number) {
     return this.movementsService.create(dto, userId);
   }
 }

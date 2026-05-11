@@ -18,6 +18,7 @@ build/
 coverage/
 .next/
 out/
+**/dist/
 
 # =========================
 # Logs
@@ -82,12 +83,20 @@ coverage/
 uploads/
 exports/
 reports/
+release/
+*.zip
 
 # =========================
 # Base de datos local
 # =========================
 *.sqlite
 *.sqlite3
+
+# =========================
+# Credenciales externas
+# =========================
+backend_dulce_colonial/config/google-credentials.json
+backend_dulce_colonial/config/google-token.json
 
 # =========================
 # Archivos sensibles
@@ -103,3 +112,30 @@ reports/
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# Local generated files
+node_modules/
+dist/
+build/
+reports/
+*.log
+.DS_Store
+
+# Environment files
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Secrets / credentials
+google-credentials.json
+google-token.json
+**/google-credentials.json
+**/google-token.json
+**/*.pem
+**/*.key
+
+# Local backups
+.local-backups/
+*.backup.*
+Dockerfile.backup.*

@@ -56,13 +56,19 @@ export class InventoryController {
 
   @Patch(':id')
   @Roles(Role.ADMIN, Role.OPERADOR)
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateIngredientDto) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateIngredientDto,
+  ) {
     return this.inventoryService.update(id, dto);
   }
 
   @Patch(':id/adjust')
   @Roles(Role.ADMIN, Role.OPERADOR)
-  adjust(@Param('id', ParseIntPipe) id: number, @Body() dto: AdjustQuantityDto) {
+  adjust(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdjustQuantityDto,
+  ) {
     return this.inventoryService.adjustQuantity(id, dto);
   }
 

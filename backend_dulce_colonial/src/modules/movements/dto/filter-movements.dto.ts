@@ -1,15 +1,22 @@
-import { MovementEntity, MovementType } from '@prisma/client';
-import { IsDateString, IsEnum, IsInt, IsOptional } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  MOVEMENT_ENTITY_VALUES,
+  MOVEMENT_TYPE_VALUES,
+} from '../movements.constants';
+import type {
+  MovementEntityValue,
+  MovementTypeValue,
+} from '../movements.constants';
 
 export class FilterMovementsDto {
   @IsOptional()
-  @IsEnum(MovementType)
-  type?: MovementType;
+  @IsIn(MOVEMENT_TYPE_VALUES)
+  type?: MovementTypeValue;
 
   @IsOptional()
-  @IsEnum(MovementEntity)
-  entityType?: MovementEntity;
+  @IsIn(MOVEMENT_ENTITY_VALUES)
+  entityType?: MovementEntityValue;
 
   @IsOptional()
   @Type(() => Number)
@@ -28,4 +35,16 @@ export class FilterMovementsDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number = 20;
 }

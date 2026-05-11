@@ -3,6 +3,10 @@
 /node_modules
 /build
 
+dist
+*.tsbuildinfo
+tsconfig.build*.tsbuildinfo
+
 # Logs
 logs
 *.log
@@ -54,3 +58,13 @@ pids
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Google local credentials
+src/config/google-credentials.json
+src/config/google-token.json
+google-credentials.json
+google-token.json
+
+# Generated reports
+reports/
+../reports/

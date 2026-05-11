@@ -1,4 +1,10 @@
-import { IsOptional, IsString, IsBoolean, IsNumber, Min } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsBoolean,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
 export class FilterIngredientDto {

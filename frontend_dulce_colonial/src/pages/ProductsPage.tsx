@@ -8,11 +8,12 @@ import Modal from '../components/ui/Modal';
 import { productsService } from '../services/products.service';
 import { Product } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
-const emptyForm = { name: '', category: '', description: '', price: 0, stock: 0, status: 'ACTIVO' };
+const emptyForm = { name: '', category: '', description: '', price: '', stock: '', status: 'ACTIVO' };
 
 export default function ProductsPage() {
-  const { isOperador } = useAuth();
+  const { isAdmin } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -31,8 +32,22 @@ export default function ProductsPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (d: any) =>
-      editing ? productsService.update(editing.id, d) : productsService.create(d),
+    mutationFn: (d: any) => {
+      const price = Number(d.price || 0);
+      const stock = Number(d.stock || 0);
+      if (!Number.isFinite(price) || price < 0) {
+        throw new Error('El precio debe ser un número válido mayor o igual a 0.');
+      }
+      if (!Number.isFinite(stock) || stock < 0) {
+        throw new Error('El stock debe ser un número válido mayor o igual a 0.');
+      }
+      const payload = {
+        ...d,
+        price,
+        stock,
+      };
+      return editing ? productsService.update(editing.id, payload) : productsService.create(payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] });
       toast.success(editing ? 'Producto actualizado' : 'Producto creado');
@@ -40,7 +55,7 @@ export default function ProductsPage() {
       setEditing(null);
       setForm(emptyForm);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message || 'Error al guardar'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, 'Error al guardar')),
   });
 
   const deactivateMutation = useMutation({
@@ -52,7 +67,11 @@ export default function ProductsPage() {
   });
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setModalOpen(true); };
-  const openEdit = (p: Product) => { setEditing(p); setForm({ ...p }); setModalOpen(true); };
+  const openEdit = (p: Product) => {
+    setEditing(p);
+    setForm({ ...p, price: String(p.price ?? ''), stock: String(p.stock ?? '') });
+    setModalOpen(true);
+  };
 
   const columns = [
     { key: 'name', label: 'Nombre' },
@@ -64,10 +83,10 @@ export default function ProductsPage() {
     { key: 'status', label: 'Estado', render: (r: Product) => <Badge label={r.status} /> },
     { key: 'actions', label: '', render: (r: Product) => (
       <div style={{ display: 'flex', gap: 6 }}>
-        {isOperador && (
+        {isAdmin && (
           <button onClick={() => openEdit(r)} style={btnStyle('#3d1a00')}>Editar</button>
         )}
-        {isOperador && r.status !== 'INACTIVO' && (
+        {isAdmin && r.status !== 'INACTIVO' && (
           <button onClick={() => deactivateMutation.mutate(r.id)} style={btnStyle('#c0392b')}>
             Desactivar
           </button>
@@ -85,7 +104,7 @@ export default function ProductsPage() {
           onChange={e => { setSearch(e.target.value); setPage(1); }}
           style={inputStyle}
         />
-        {isOperador && (
+        {isAdmin && (
           <button onClick={openCreate} style={{ padding: '9px 20px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>
             + Nuevo producto
           </button>
@@ -124,8 +143,8 @@ export default function ProductsPage() {
             </datalist>
           </div>
           <Field label="Descripción" value={form.description} onChange={v => setForm({ ...form, description: v })} />
-          <Field label="Precio" type="number" value={form.price} onChange={v => setForm({ ...form, price: +v })} />
-          <Field label="Stock inicial" type="number" value={form.stock} onChange={v => setForm({ ...form, stock: +v })} />
+          <Field label="Precio" type="number" value={form.price} onChange={v => setForm({ ...form, price: v })} numeric />
+          <Field label="Stock inicial" type="number" value={form.stock} onChange={v => setForm({ ...form, stock: v })} numeric />
           <button
             onClick={() => saveMutation.mutate(form)}
             disabled={saveMutation.isPending}
@@ -138,10 +157,27 @@ export default function ProductsPage() {
   );
 }
 
-const Field = ({ label, value, onChange, type = 'text' }: any) => (
+interface FieldProps {
+  label: string;
+  value: string | number;
+  onChange: (value: string) => void;
+  type?: string;
+  numeric?: boolean;
+}
+
+const Field = ({ label, value, onChange, type = 'text', numeric = false }: FieldProps) => (
   <div>
     <label style={labelStyle}>{label}</label>
-    <input type={type} value={value} onChange={e => onChange(e.target.value)} style={inputStyle} />
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onFocus={numeric ? (e) => e.currentTarget.select() : undefined}
+      inputMode={numeric ? 'decimal' : undefined}
+      min={numeric ? 0 : undefined}
+      placeholder={numeric ? '0' : undefined}
+      style={inputStyle}
+    />
   </div>
 );
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import { getApiErrorMessage } from '../utils/errorMessage';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -14,8 +15,8 @@ export default function LoginPage() {
     try {
       await login(email, password);
       toast.success('Bienvenido a Dulce Colonial');
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Credenciales inválidas');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Credenciales inválidas'));
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ProductStatus } from '@prisma/client';
+import { PRODUCT_STATUS_VALUES } from '../constants/product-status.constants';
+import type { ProductStatusValue } from '../constants/product-status.constants';
 
 export class FilterProductsDto {
   @IsOptional()
@@ -12,8 +13,8 @@ export class FilterProductsDto {
   category?: string;
 
   @IsOptional()
-  @IsEnum(ProductStatus)
-  status?: ProductStatus;
+  @IsIn(PRODUCT_STATUS_VALUES)
+  status?: ProductStatusValue;
 
   @IsOptional()
   @Type(() => Number)
@@ -25,5 +26,5 @@ export class FilterProductsDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  limit?: number = 10;
+  limit?: number = 15;
 }

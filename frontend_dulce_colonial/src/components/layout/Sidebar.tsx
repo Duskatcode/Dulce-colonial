@@ -1,16 +1,58 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import AlertsPanel from '../ui/AlertsPanel';
 
 const navItems = [
   { to: '/dashboard',  icon: '🏠', label: 'Inicio'       },
   { to: '/products',   icon: '🍰', label: 'Productos'     },
   { to: '/inventory',  icon: '📦', label: 'Inventario'    },
   { to: '/movements',  icon: '↕️',  label: 'Movimientos'   },
+  {
+    to: '/invoices',
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M7 3h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V5a2 2 0 0 1 2-2Z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9 7h6M9 11h6M9 15h4"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+    label: 'Facturas',
+  },
   { to: '/reports',    icon: '📊', label: 'Reportes'      },
+  { to: '/cash', icon: '🏧', label: 'Caja' },
 ];
 
 const adminItems = [
-  { to: '/users',      icon: '👥', label: 'Usuarios'      },
+  { to: '/users', icon: '👥', label: 'Usuarios' },
+];
+
+const configItems = [
+  {
+    to: '/drive/settings',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+      </svg>
+    ),
+    label: 'Google Drive',
+  },
 ];
 
 export default function Sidebar() {
@@ -50,6 +92,16 @@ export default function Sidebar() {
           </NavLink>
         ))}
 
+        <div style={{ fontSize: 10, color: '#8a6a5a', padding: '16px 8px 8px', letterSpacing: 1 }}>
+          CONFIGURACIÓN
+        </div>
+        {configItems.map(item => (
+          <NavLink key={item.to} to={item.to} style={({ isActive }) => linkStyle(isActive)}>
+            <span>{item.icon}</span>
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+
         {isAdmin && (
           <>
             <div style={{ fontSize: 10, color: '#8a6a5a', padding: '16px 8px 8px', letterSpacing: 1 }}>
@@ -64,7 +116,9 @@ export default function Sidebar() {
           </>
         )}
       </nav>
-
+      <div style={{ padding: '0 0 8px' }}>
+        <AlertsPanel />
+      </div>
       {/* Usuario */}
       <div style={{ padding: '16px 8px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
         <div style={{ fontSize: 13, color: '#fff', fontWeight: 600 }}>{user?.name}</div>

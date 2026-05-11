@@ -5,6 +5,11 @@ import Badge from '../components/ui/Badge';
 import { reportsService } from '../services/reports.service';
 import { movementsService } from '../services/movements.service';
 
+type MovementsSummary = {
+  total: number;
+  byType: Record<string, number>;
+};
+
 export default function DashboardPage() {
   const { data: stock } = useQuery({
     queryKey: ['report-stock'],
@@ -16,7 +21,7 @@ export default function DashboardPage() {
     queryFn: reportsService.getLowStock,
   });
 
-  const { data: summary } = useQuery({
+  const { data: summary } = useQuery<MovementsSummary>({
     queryKey: ['movements-summary'],
     queryFn: () => movementsService.getSummary(),
   });
@@ -67,10 +72,10 @@ export default function DashboardPage() {
         <div style={{ background: '#fff', borderRadius: 12, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.07)', gridColumn: '1 / -1' }}>
           <h3 style={{ margin: '0 0 16px', fontSize: 15, color: '#1a0a00' }}>↕️ Resumen de movimientos</h3>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {summary?.byType?.map((t: any) => (
-              <div key={t.type} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#faf5f0', borderRadius: 8 }}>
-                <Badge label={t.type} />
-                <span style={{ fontWeight: 700 }}>{t._count.id}</span>
+            {Object.entries(summary?.byType ?? {}).map(([type, count]) => (
+              <div key={type} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#faf5f0', borderRadius: 8 }}>
+                <Badge label={type} />
+                <span style={{ fontWeight: 700 }}>{count}</span>
                 <span style={{ color: '#888', fontSize: 13 }}>movimientos</span>
               </div>
             ))}

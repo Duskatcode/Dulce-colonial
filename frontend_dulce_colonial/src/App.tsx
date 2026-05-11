@@ -8,6 +8,14 @@ import ProductsPage from './pages/ProductsPage';
 import InventoryPage from './pages/InventoryPage';
 import MovementsPage from './pages/MovementsPage';
 import ReportsPage from './pages/ReportsPage';
+import UsersPage from './pages/UsersPage';
+import DrivePage from './pages/DrivePage';
+import CashPage from './pages/CashPage';
+import DriveCallbackPage from './pages/DriveCallbackPage';
+import DriveSettingsPage from './pages/DriveSettingsPage';
+import InvoicesPage from './pages/InvoicesPage';
+
+
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -25,6 +33,13 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return !user ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAdmin, isLoading } = useAuth();
+  if (isLoading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Cargando...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return isAdmin ? <>{children}</> : <Navigate to="/dashboard" replace />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -32,6 +47,12 @@ export default function App() {
         <BrowserRouter>
           <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
           <Routes>
+            <Route path="/drive/callback" element={<DriveCallbackPage />} />
+            <Route path="/cash" element={<PrivateRoute><CashPage /></PrivateRoute>} />
+            <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
+            <Route path="/drive" element={<AdminRoute><DrivePage /></AdminRoute>} />
+            <Route path="/drive/settings" element={<PrivateRoute><DriveSettingsPage /></PrivateRoute>} />
+            <Route path="/invoices" element={<PrivateRoute><InvoicesPage /></PrivateRoute>} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/dashboard"  element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
             <Route path="/products"   element={<PrivateRoute><ProductsPage /></PrivateRoute>} />

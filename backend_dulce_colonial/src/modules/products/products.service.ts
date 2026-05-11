@@ -1,5 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, ProductStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma/prisma.service';
 import { AlertsGateway } from '../alerts/alerts.gateway';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -15,8 +19,8 @@ export class ProductsService {
   ) {}
 
   async findAll(filters: FilterProductsDto) {
-    const page = filters.page ?? 1;
-    const limit = filters.limit ?? 10;
+    const page = Number(filters.page ?? 1);
+    const limit = Number(filters.limit ?? 15);
     const where: Prisma.ProductWhereInput = {};
 
     if (filters.search) {
@@ -25,15 +29,16 @@ export class ProductsService {
         { category: { contains: filters.search, mode: 'insensitive' } },
       ];
     }
-    if (filters.category) where.category = { equals: filters.category, mode: 'insensitive' };
+    if (filters.category)
+      where.category = { equals: filters.category, mode: 'insensitive' };
     if (filters.status) where.status = filters.status;
 
     const [data, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
         orderBy: { updatedAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: Number((page - 1) * limit),
+        take: Number(limit),
       }),
       this.prisma.product.count({ where }),
     ]);
@@ -64,7 +69,7 @@ export class ProductsService {
         price: dto.price,
         stock: dto.stock ?? 0,
         minStock: dto.minStock ?? 0,
-        status: dto.status ?? ProductStatus.ACTIVO,
+        status: dto.status ?? 'ACTIVO',
       },
     });
     this.emitLowStockIfNeeded(product);
@@ -79,6 +84,14 @@ export class ProductsService {
     });
     this.emitLowStockIfNeeded(product);
     return product;
+  }
+
+  async deactivate(id: number) {
+    await this.findOne(id);
+    return this.prisma.product.update({
+      where: { id },
+      data: { status: 'INACTIVO' },
+    });
   }
 
   async remove(id: number) {
@@ -98,9 +111,12 @@ export class ProductsService {
   }
 
   async getLowStock() {
-    const all = await this.prisma.product.findMany({ orderBy: { stock: 'asc' } });
+    const all = await this.prisma.product.findMany({
+      orderBy: { stock: 'asc' },
+    });
     return all.filter((product) => {
-      const threshold = product.minStock && product.minStock > 0 ? product.minStock : 2;
+      const threshold =
+        product.minStock && product.minStock > 0 ? product.minStock : 2;
       return product.stock <= threshold;
     });
   }
@@ -108,10 +124,12 @@ export class ProductsService {
   async adjustStock(id: number, dto: AdjustStockDto) {
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({ where: { id } });
-      if (!product) throw new NotFoundException(`Producto #${id} no encontrado`);
+      if (!product)
+        throw new NotFoundException(`Producto #${id} no encontrado`);
 
       const newStock = product.stock + dto.amount;
-      if (newStock < 0) throw new BadRequestException('El stock no puede ser negativo');
+      if (newStock < 0)
+        throw new BadRequestException('El stock no puede ser negativo');
 
       const updated = await tx.product.update({
         where: { id },
@@ -123,8 +141,14 @@ export class ProductsService {
     });
   }
 
-  private emitLowStockIfNeeded(product: { id: number; name: string; stock: number; minStock: number }) {
-    const threshold = product.minStock && product.minStock > 0 ? product.minStock : 2;
+  private emitLowStockIfNeeded(product: {
+    id: number;
+    name: string;
+    stock: number;
+    minStock: number;
+  }) {
+    const threshold =
+      product.minStock && product.minStock > 0 ? product.minStock : 2;
     if (product.stock <= threshold) {
       this.alertsGateway.emitStockAlert({
         entityType: 'producto',

@@ -40,7 +40,9 @@ export class AlertsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       ...alert,
       timestamp: new Date().toISOString(),
     });
-    this.logger.warn(`⚠️  Stock bajo: ${alert.entityName} (${alert.currentStock}/${alert.minStock})`);
+    this.logger.warn(
+      `⚠️  Stock bajo: ${alert.entityName} (${alert.currentStock}/${alert.minStock})`,
+    );
   }
 
   // Emite notificación general
