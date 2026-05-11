@@ -58,16 +58,25 @@ export default function useDrive() {
     },
   });
 
-  const expiresAt = data?.expiresAt;
-  const isExpired =
-    !!expiresAt && new Date(expiresAt).getTime() < new Date().getTime();
+  const isExpired = Boolean(data?.requiresReauth);
 
   return {
     isConnected: Boolean(data?.connected),
     isExpired,
+    isOperational: Boolean(data?.connected && data?.folderConfigured),
     isLoading: isLoading || isFetching,
     email: data?.email,
-    expiresAt,
+    status: data,
+    accessTokenExpiresAt: data?.accessTokenExpiresAt,
+    accessTokenExpiresInSeconds: data?.accessTokenExpiresInSeconds,
+    hasRefreshToken: Boolean(data?.hasRefreshToken),
+    refreshTokenIssuedAt: data?.refreshTokenIssuedAt,
+    refreshTokenExpiresAt: data?.refreshTokenExpiresAt,
+    refreshTokenExpiresInSeconds: data?.refreshTokenExpiresInSeconds,
+    refreshTokenStatus: data?.refreshTokenStatus,
+    requiresReauth: Boolean(data?.requiresReauth),
+    folderConfigured: Boolean(data?.folderConfigured),
+    folderWarning: data?.folderWarning,
     connect: handleConnect,
     revoke: revokeMutation.mutateAsync,
     refresh: refreshMutation.mutateAsync,

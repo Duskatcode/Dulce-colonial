@@ -1,4 +1,5 @@
 import api from './api';
+import type { DriveStatus } from '../types/drive.types';
 
 export const reportsService = {
   getStock:      () => api.get('/reports/stock').then(r => r.data),
@@ -8,7 +9,7 @@ export const reportsService = {
   getHistory:    () => api.get('/reports').then(r => r.data),
   triggerManual: (type: 'stock' | 'movements' | 'lowstock') =>
     api.post('/reports/manual', { type }).then(r => r.data),
-  getDriveStatus: () => api.get('/drive/status').then(r => r.data),
+  getDriveStatus: () => api.get<DriveStatus>('/drive/status').then(r => r.data),
   getDriveFiles:  (folder: 'daily' | 'weekly' | 'manual') =>
     api.get(`/drive/files/${folder}`).then(r => r.data),
 };

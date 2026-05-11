@@ -16,7 +16,7 @@ export class DriveController {
   @Roles('ADMIN')
   @ApiOperation({ summary: 'Estado de conexión con Google Drive' })
   status() {
-    return { connected: this.driveService.ready };
+    return this.driveService.getConnectionStatus();
   }
 
   @Get('files/daily')

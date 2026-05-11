@@ -14,12 +14,35 @@ const formatDate = (value?: string) =>
     : undefined;
 
 export default function DriveSettingsPanel() {
-  const { isConnected, isExpired, isLoading, email, expiresAt, connect, refresh, revoke } = useDrive();
+  const {
+    accessTokenExpiresAt,
+    connect,
+    email,
+    folderConfigured,
+    folderWarning,
+    hasRefreshToken,
+    isConnected,
+    isExpired,
+    isLoading,
+    refresh,
+    refreshTokenExpiresAt,
+    refreshTokenExpiresInSeconds,
+    refreshTokenIssuedAt,
+    refreshTokenStatus,
+    revoke,
+  } = useDrive();
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   const normalizedEmail = email && email !== 'desconocida' ? email : undefined;
-  const formattedExpiry = useMemo(() => formatDate(expiresAt), [expiresAt]);
-  const isReady = isConnected && !isExpired;
+  const formattedIssuedAt = useMemo(() => formatDate(refreshTokenIssuedAt ?? undefined), [refreshTokenIssuedAt]);
+  const formattedRefreshExpiry = useMemo(() => formatDate(refreshTokenExpiresAt ?? undefined), [refreshTokenExpiresAt]);
+  const formattedAccessExpiry = useMemo(() => formatDate(accessTokenExpiresAt ?? undefined), [accessTokenExpiresAt]);
+  const formattedRefreshTimeLeft = useMemo(
+    () => formatDuration(refreshTokenExpiresInSeconds),
+    [refreshTokenExpiresInSeconds],
+  );
+  const isReady = isConnected && !isExpired && folderConfigured;
+  const isIncomplete = isConnected && !isExpired && !folderConfigured;
   const isPendingRenewal = isConnected && isExpired;
 
   const status = (() => {
@@ -34,9 +57,18 @@ export default function DriveSettingsPanel() {
     if (isReady) {
       return {
         className: 'connected',
-        title: 'Drive conectado',
+        title: 'Drive operativo',
         description:
           'Tu cuenta está autorizada y los reportes se guardarán automáticamente en Google Drive.',
+      };
+    }
+
+    if (isIncomplete) {
+      return {
+        className: 'expired',
+        title: 'Drive conectado, configuración incompleta',
+        description:
+          'La autorización OAuth está activa, pero falta configurar la carpeta base para subir reportes.',
       };
     }
 
@@ -45,7 +77,7 @@ export default function DriveSettingsPanel() {
         className: 'expired',
         title: 'Autorización vencida',
         description:
-          'Esta autorización venció. Renueva el acceso o fuerza el refresh del token para reanudar respaldos.',
+          'No hay refresh token disponible. Debes volver a autorizar Google Drive para reanudar respaldos.',
       };
     }
 
@@ -81,18 +113,72 @@ export default function DriveSettingsPanel() {
 
         <p className="dc-drive-description">{status.description}</p>
 
-        {(normalizedEmail || formattedExpiry) && (
+        {(normalizedEmail || isConnected) && (
           <div className="dc-drive-info-list">
             {normalizedEmail && (
               <InfoRow label="Cuenta autorizada" value={normalizedEmail} />
             )}
 
-            {formattedExpiry && (
-              <InfoRow
-                label={isPendingRenewal ? 'Venció el' : 'Válido hasta'}
-                value={formattedExpiry}
-              />
+            {isConnected && (
+              <>
+                <InfoRow
+                  label="Refresh token"
+                  value={getRefreshTokenLabel(hasRefreshToken, refreshTokenStatus)}
+                />
+
+                {formattedIssuedAt && (
+                  <InfoRow label="Autorizado desde" value={formattedIssuedAt} />
+                )}
+
+                {hasRefreshToken && (
+                  <InfoRow label="Renovación automática" value="Activa" />
+                )}
+
+                {formattedRefreshExpiry ? (
+                  <>
+                    <InfoRow
+                      label="Refresh token válido hasta"
+                      value={formattedRefreshExpiry}
+                    />
+                    {formattedRefreshTimeLeft && (
+                      <InfoRow label="Tiempo restante" value={formattedRefreshTimeLeft} />
+                    )}
+                  </>
+                ) : hasRefreshToken ? (
+                  <InfoRow
+                    label="Vencimiento del refresh token"
+                    value="Sin vencimiento fijo detectado"
+                  />
+                ) : (
+                  <InfoRow label="Acción requerida" value="Volver a autorizar Drive" />
+                )}
+
+                {formattedAccessExpiry && (
+                  <InfoRow
+                    label="Access token técnico"
+                    value={`${formattedAccessExpiry} (renovable automáticamente)`}
+                  />
+                )}
+              </>
             )}
+          </div>
+        )}
+
+        {!isLoading && isConnected && hasRefreshToken && !formattedRefreshExpiry && (
+          <div className="dc-drive-note-box">
+            El acceso puede requerir renovación si Google revoca permisos o si la app está en modo testing.
+          </div>
+        )}
+
+        {!isLoading && folderWarning && (
+          <div className="dc-drive-danger-box">
+            <p className="dc-drive-danger-text">
+              Drive está autorizado, pero falta configurar la carpeta base.
+              Los reportes quedarán como PENDIENTE_DRIVE hasta configurar GOOGLE_DRIVE_FOLDER_ID.
+            </p>
+            <p className="dc-drive-danger-text" style={{ margin: 0 }}>
+              {folderWarning}
+            </p>
           </div>
         )}
 
@@ -100,7 +186,7 @@ export default function DriveSettingsPanel() {
           <div className="dc-empty-state">Consultando Google Drive...</div>
         )}
 
-        {!isLoading && isReady && (
+        {!isLoading && (isReady || isIncomplete) && (
           <>
             {showDisconnectConfirm ? (
               <DisconnectConfirm
@@ -205,6 +291,25 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <strong className="dc-drive-info-value">{value}</strong>
     </div>
   );
+}
+
+function getRefreshTokenLabel(
+  hasRefreshToken: boolean,
+  status?: string,
+) {
+  if (!hasRefreshToken) return 'No disponible';
+  if (status === 'EXPIRES_AT_KNOWN') return 'Activo con expiración conocida';
+  return 'Activo';
+}
+
+function formatDuration(value?: number | null) {
+  if (value === undefined || value === null) return undefined;
+
+  const days = Math.floor(value / 86_400);
+  const hours = Math.floor((value % 86_400) / 3_600);
+
+  if (days > 0) return `${days} días, ${hours} horas`;
+  return `${hours} horas`;
 }
 
 function DisconnectConfirm({
