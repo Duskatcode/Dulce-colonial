@@ -2795,3 +2795,28 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.dc-route-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--dc-surface);
+  color: var(--dc-on-surface-variant);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.dc-spinner {
+  width: var(--dc-spinner-size, 32px);
+  height: var(--dc-spinner-size, 32px);
+  border: 3px solid var(--dc-primary-fixed);
+  border-top-color: var(--dc-primary);
+  border-radius: 999px;
+  animation: dc-spin 0.7s linear infinite;
+}
+
+@keyframes dc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
