@@ -55,7 +55,7 @@ export class DriveAuthController {
     @Query('error') error: string | undefined,
     @Res() res: Response,
   ) {
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost'\;
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost';
 
     if (error || !code) {
       return res.redirect(`${frontendUrl}/drive/settings?drive=error`);
