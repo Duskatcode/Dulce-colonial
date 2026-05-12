@@ -32,6 +32,8 @@ const emptyForm: UserForm = {
   role: 'OPERADOR',
 };
 
+const allowedRoles = ['ADMIN', 'OPERADOR'] as const;
+
 const roleMeta: Record<Role, { label: string; helper: string; icon: string }> = {
   ADMIN: {
     label: 'Administrador',
@@ -42,11 +44,6 @@ const roleMeta: Record<Role, { label: string; helper: string; icon: string }> = 
     label: 'Operador',
     helper: 'Caja, inventario y movimientos',
     icon: 'point_of_sale',
-  },
-  VISOR: {
-    label: 'Visor',
-    helper: 'Consulta sin acciones críticas',
-    icon: 'visibility',
   },
 };
 
@@ -152,6 +149,11 @@ export default function UsersPage() {
 
     if (!form.password.trim()) {
       toast.error('La contraseña es obligatoria');
+      return;
+    }
+
+    if (!allowedRoles.includes(form.role)) {
+      toast.error('Rol inválido. Selecciona Administrador u Operador.');
       return;
     }
 

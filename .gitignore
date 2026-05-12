@@ -82,7 +82,7 @@ coverage/
 # =========================
 uploads/
 exports/
-reports/
+/reports/
 release/
 *.zip
 
@@ -117,7 +117,7 @@ backend_dulce_colonial/config/google-token.json
 node_modules/
 dist/
 build/
-reports/
+/reports/
 *.log
 .DS_Store
 

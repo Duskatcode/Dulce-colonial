@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'OPERADOR' | 'VISOR';
+export type Role = 'ADMIN' | 'OPERADOR';
 
 export type ProductStatus = 'ACTIVO' | 'INACTIVO' | 'AGOTADO';
 export type MovementType = 'ENTRADA' | 'SALIDA' | 'AJUSTE' | 'MERMA';

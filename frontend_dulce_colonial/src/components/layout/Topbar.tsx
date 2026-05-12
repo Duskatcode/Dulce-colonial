@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { useStockAlerts } from '../../hooks/useStockAlerts';
 import DriveStatusBadge from '../drive/DriveStatusBadge';
 
@@ -7,6 +10,8 @@ interface TopbarProps {
 
 export default function Topbar({ title }: TopbarProps) {
   const { alerts } = useStockAlerts();
+  const { logout, user } = useAuth();
+  const [openMenu, setOpenMenu] = useState<'alerts' | 'user' | null>(null);
 
   return (
     <header className="dc-topbar">
@@ -26,17 +31,65 @@ export default function Topbar({ title }: TopbarProps) {
           </div>
         )}
 
-        <button className="dc-topbar-icon-button" type="button" aria-label="Notificaciones">
-          <span className="material-symbols-outlined">notifications</span>
-        </button>
+        <div className="dc-topbar-menu">
+          <button
+            className="dc-topbar-icon-button"
+            type="button"
+            aria-label="Ver alertas"
+            title="Ver alertas"
+            aria-expanded={openMenu === 'alerts'}
+            onClick={() => setOpenMenu(openMenu === 'alerts' ? null : 'alerts')}
+          >
+            <span className="material-symbols-outlined">notifications</span>
+          </button>
 
-        <button className="dc-topbar-icon-button" type="button" aria-label="Caja">
-          <span className="material-symbols-outlined">account_balance_wallet</span>
-        </button>
+          {openMenu === 'alerts' && (
+            <div className="dc-topbar-dropdown" role="dialog" aria-label="Alertas del sistema">
+              <p className="dc-topbar-dropdown-title">Alertas del sistema</p>
+              <p className="dc-topbar-dropdown-text">
+                Revisa productos con bajo stock e insumos bajo mínimo desde el panel de inicio.
+              </p>
+              {alerts.length > 0 && (
+                <p className="dc-topbar-dropdown-note">
+                  Hay {alerts.length} alerta{alerts.length > 1 ? 's' : ''} de stock activa
+                  {alerts.length > 1 ? 's' : ''}.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
-        <button className="dc-topbar-icon-button" type="button" aria-label="Perfil">
-          <span className="material-symbols-outlined">account_circle</span>
-        </button>
+        <Link
+          className="dc-topbar-icon-button"
+          to="/drive/settings"
+          aria-label="Configurar Google Drive"
+          title="Configurar Google Drive"
+        >
+          <span className="material-symbols-outlined">cloud_sync</span>
+        </Link>
+
+        <div className="dc-topbar-menu">
+          <button
+            className="dc-topbar-icon-button"
+            type="button"
+            aria-label="Abrir menú de usuario"
+            title="Abrir menú de usuario"
+            aria-expanded={openMenu === 'user'}
+            onClick={() => setOpenMenu(openMenu === 'user' ? null : 'user')}
+          >
+            <span className="material-symbols-outlined">account_circle</span>
+          </button>
+
+          {openMenu === 'user' && (
+            <div className="dc-topbar-dropdown dc-topbar-user-menu" role="dialog" aria-label="Usuario">
+              <p className="dc-topbar-dropdown-title">{user?.name ?? 'Usuario'}</p>
+              <p className="dc-topbar-dropdown-text">{user?.role ?? 'Sin rol asignado'}</p>
+              <button className="dc-topbar-logout" type="button" onClick={logout}>
+                Cerrar sesión
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

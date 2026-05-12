@@ -5,14 +5,11 @@ import toast from 'react-hot-toast';
 import AppLayout from '../components/layout/AppLayout';
 import StatCard from '../components/ui/StatCard';
 import { reportsService } from '../services/reports.service';
+import type { DriveStatus } from '../types/drive.types';
 import { getApiErrorMessage } from '../utils/errorMessage';
 
 type DriveFolderKey = 'daily' | 'weekly' | 'manual';
 type ManualReportType = 'stock' | 'movements' | 'lowstock';
-
-interface DriveStatusResponse {
-  connected: boolean;
-}
 
 interface DriveFile {
   id: string;
@@ -92,18 +89,19 @@ export default function DrivePage() {
   const qc = useQueryClient();
   const [activeFolder, setActiveFolder] = useState<DriveFolderKey>('daily');
 
-  const { data: status, isLoading: loadingStatus } = useQuery<DriveStatusResponse>({
+  const { data: status, isLoading: loadingStatus } = useQuery<DriveStatus>({
     queryKey: ['drive-status'],
     queryFn: reportsService.getDriveStatus,
     refetchInterval: 30_000,
   });
 
   const isConnected = status?.connected === true;
+  const isOperational = isConnected && status?.folderConfigured === true;
 
   const { data: driveFiles, isLoading: loadingFiles } = useQuery<DriveFile[]>({
     queryKey: ['drive-files', activeFolder],
     queryFn: () => reportsService.getDriveFiles(activeFolder),
-    enabled: isConnected,
+    enabled: isOperational,
   });
 
   const files = driveFiles ?? [];
@@ -156,8 +154,10 @@ export default function DrivePage() {
             <span>
               {loadingStatus
                 ? 'Verificando estado...'
-                : isConnected
-                  ? 'Conectado y listo para subir reportes'
+                : isOperational
+                  ? 'Operativo para subir reportes'
+                  : isConnected
+                    ? 'Conectado, configuración incompleta'
                   : 'Desconectado'}
             </span>
           </div>
@@ -170,7 +170,8 @@ export default function DrivePage() {
                 key={report.type}
                 className="dc-drive-manual-button"
                 type="button"
-                disabled={manualMutation.isPending}
+                disabled={manualMutation.isPending || !isOperational}
+                title={!isOperational ? 'Configura GOOGLE_DRIVE_FOLDER_ID para subir reportes' : undefined}
                 onClick={() => manualMutation.mutate(report.type)}
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
@@ -193,6 +194,19 @@ export default function DrivePage() {
 
           <Link className="dc-button-primary" style={{ padding: '12px 18px', textDecoration: 'none' }} to="/drive/settings">
             Ir a configuración
+          </Link>
+        </section>
+      ) : !isOperational ? (
+        <section className="dc-drive-warning-card">
+          <span className="material-symbols-outlined">folder_off</span>
+          <h2 className="dc-drive-warning-title">Drive conectado, configuración incompleta</h2>
+          <p className="dc-drive-warning-text">
+            Drive está autorizado, pero falta configurar GOOGLE_DRIVE_FOLDER_ID.
+            Los reportes quedarán como PENDIENTE_DRIVE hasta configurar la carpeta base.
+          </p>
+
+          <Link className="dc-button-primary" style={{ padding: '12px 18px', textDecoration: 'none' }} to="/drive/settings">
+            Revisar configuración
           </Link>
         </section>
       ) : (
@@ -220,8 +234,8 @@ export default function DrivePage() {
               icon="cloud_done"
               iconType="material"
               label="Estado"
-              value="Conectado"
-              subtitle="Drive disponible"
+              value="Operativo"
+              subtitle="Carpeta configurada"
               accent="warning"
             />
           </section>

@@ -23,6 +23,33 @@ interface GoogleCredentialsFile {
   web?: GoogleCredentials;
 }
 
+type RefreshTokenStatus =
+  | 'ACTIVE'
+  | 'MISSING'
+  | 'EXPIRES_AT_KNOWN'
+  | 'UNKNOWN_EXPIRATION';
+
+interface StoredGoogleToken extends Auth.Credentials {
+  created_at?: string;
+  refresh_token_expires_at?: string | null;
+  refresh_token_expires_in?: number;
+}
+
+export interface DriveStatusResponse {
+  connected: boolean;
+  email?: string | null;
+  accessTokenExpiresAt?: string | null;
+  accessTokenExpiresInSeconds?: number | null;
+  hasRefreshToken: boolean;
+  refreshTokenIssuedAt?: string | null;
+  refreshTokenExpiresAt?: string | null;
+  refreshTokenExpiresInSeconds?: number | null;
+  refreshTokenStatus: RefreshTokenStatus;
+  requiresReauth: boolean;
+  folderConfigured: boolean;
+  folderWarning?: string | null;
+}
+
 @Injectable()
 export class DriveService implements OnModuleInit {
   private readonly logger = new Logger(DriveService.name);
@@ -136,11 +163,13 @@ export class DriveService implements OnModuleInit {
     }
     const token = JSON.parse(
       fs.readFileSync(tokenPath, 'utf8'),
-    ) as Auth.Credentials;
+    ) as StoredGoogleToken;
+
+    const tokenWithMetadata = this.ensureTokenMetadata(token, tokenPath);
 
     // Verificar que el token guardado tenga refresh_token
     // Google solo lo envía la primera vez; si no está, hay que re-autorizar
-    if (!token.refresh_token) {
+    if (!tokenWithMetadata.refresh_token) {
       this.logger.warn(
         '⚠️  Token sin refresh_token. Se requiere re-autorización.',
       );
@@ -149,18 +178,24 @@ export class DriveService implements OnModuleInit {
       return;
     }
 
-    this.auth.setCredentials(token);
+    this.auth.setCredentials(tokenWithMetadata);
 
     // Auto-refresh: cuando googleapis renueva el access_token, se persiste en disco
     // IMPORTANTE: siempre preservar el refresh_token original porque Google
     // no lo reenvía en cada renovación
     this.auth.on('tokens', (newTokens) => {
       const updated = {
-        ...token,
+        ...tokenWithMetadata,
         ...newTokens,
         // Conservar el refresh_token existente si el nuevo no lo trae
-        refresh_token: newTokens.refresh_token ?? token.refresh_token,
-      };
+        refresh_token:
+          newTokens.refresh_token ?? tokenWithMetadata.refresh_token,
+        created_at: tokenWithMetadata.created_at,
+        refresh_token_expires_at: this.getRefreshTokenExpiresAt(
+          newTokens as StoredGoogleToken,
+          tokenWithMetadata.refresh_token_expires_at,
+        ),
+      } satisfies StoredGoogleToken;
       fs.writeFileSync(tokenPath, JSON.stringify(updated, null, 2));
       this.logger.log('🔄 Token de Drive renovado automáticamente');
     });
@@ -278,15 +313,16 @@ export class DriveService implements OnModuleInit {
     }
 
     const { tokens } = await this.auth.getToken(trimmedCode);
+    const storedToken = this.withTokenMetadata(tokens as StoredGoogleToken);
 
-    if (!tokens.refresh_token) {
+    if (!storedToken.refresh_token) {
       this.logger.warn(
         '⚠️  Google no devolvió refresh_token. Asegúrate de que la app tenga acceso offline y prompt=consent.',
       );
     }
 
     fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
-    fs.writeFileSync(tokenPath, JSON.stringify(tokens, null, 2));
+    fs.writeFileSync(tokenPath, JSON.stringify(storedToken, null, 2));
 
     await this.loadToken(tokenPath);
 
@@ -485,14 +521,45 @@ export class DriveService implements OnModuleInit {
     return res.data.files ?? [];
   }
 
-  getConnectionStatus() {
-    const expiresAt = this.auth?.credentials?.expiry_date
+  getConnectionStatus(): DriveStatusResponse {
+    const token = this.readStoredToken();
+    const now = Date.now();
+    const accessTokenExpiresAt = this.auth?.credentials?.expiry_date
       ? new Date(this.auth.credentials.expiry_date).toISOString()
-      : undefined;
+      : null;
+    const accessTokenExpiresInSeconds = this.auth?.credentials?.expiry_date
+      ? Math.max(0, Math.floor((this.auth.credentials.expiry_date - now) / 1000))
+      : null;
+    const refreshTokenExpiresAt = token?.refresh_token_expires_at ?? null;
+    const refreshTokenExpiresInSeconds = refreshTokenExpiresAt
+      ? Math.max(
+          0,
+          Math.floor((new Date(refreshTokenExpiresAt).getTime() - now) / 1000),
+        )
+      : null;
+    const hasRefreshToken = Boolean(token?.refresh_token);
+    const folderConfigured = this.isFolderConfigured();
+    const refreshTokenStatus: RefreshTokenStatus = !hasRefreshToken
+      ? 'MISSING'
+      : refreshTokenExpiresAt
+        ? 'EXPIRES_AT_KNOWN'
+        : 'UNKNOWN_EXPIRATION';
+
     return {
       connected: this.isReady,
-      email: undefined,
-      expiresAt,
+      email: null,
+      accessTokenExpiresAt,
+      accessTokenExpiresInSeconds,
+      hasRefreshToken,
+      refreshTokenIssuedAt: token?.created_at ?? null,
+      refreshTokenExpiresAt,
+      refreshTokenExpiresInSeconds,
+      refreshTokenStatus,
+      requiresReauth: !hasRefreshToken,
+      folderConfigured,
+      folderWarning: folderConfigured
+        ? null
+        : 'GOOGLE_DRIVE_FOLDER_ID no está configurado. Los reportes no podrán subirse a Drive.',
     };
   }
 
@@ -549,6 +616,69 @@ export class DriveService implements OnModuleInit {
 
   private hasValidCredentials() {
     return this.isReady && !!this.auth;
+  }
+
+  private isFolderConfigured() {
+    return Boolean(this.config.get<string>('GOOGLE_DRIVE_FOLDER_ID'));
+  }
+
+  private readStoredToken(): StoredGoogleToken | null {
+    if (!this.tokenPath || !fs.existsSync(this.tokenPath)) return null;
+
+    try {
+      return JSON.parse(fs.readFileSync(this.tokenPath, 'utf8')) as StoredGoogleToken;
+    } catch {
+      return null;
+    }
+  }
+
+  private ensureTokenMetadata(
+    token: StoredGoogleToken,
+    tokenPath: string,
+  ): StoredGoogleToken {
+    const tokenWithMetadata = this.withTokenMetadata(token, tokenPath);
+
+    if (
+      tokenWithMetadata.created_at !== token.created_at ||
+      tokenWithMetadata.refresh_token_expires_at !== token.refresh_token_expires_at
+    ) {
+      fs.writeFileSync(tokenPath, JSON.stringify(tokenWithMetadata, null, 2));
+    }
+
+    return tokenWithMetadata;
+  }
+
+  private withTokenMetadata(
+    token: StoredGoogleToken,
+    tokenPath?: string,
+  ): StoredGoogleToken {
+    const createdAt =
+      token.created_at ??
+      (tokenPath && fs.existsSync(tokenPath)
+        ? fs.statSync(tokenPath).birthtime.toISOString()
+        : new Date().toISOString());
+
+    return {
+      ...token,
+      created_at: createdAt,
+      refresh_token_expires_at: this.getRefreshTokenExpiresAt(
+        token,
+        token.refresh_token_expires_at ?? null,
+      ),
+    };
+  }
+
+  private getRefreshTokenExpiresAt(
+    token: StoredGoogleToken,
+    currentValue: string | null = null,
+  ): string | null {
+    const expiresIn = Number(token.refresh_token_expires_in);
+
+    if (Number.isFinite(expiresIn) && expiresIn > 0) {
+      return new Date(Date.now() + expiresIn * 1000).toISOString();
+    }
+
+    return currentValue;
   }
 
   // ─── Estado de la conexión ────────────────────────────────────────────────

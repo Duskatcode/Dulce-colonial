@@ -66,5 +66,5 @@ google-credentials.json
 google-token.json
 
 # Generated reports
-reports/
+/reports/
 ../reports/
